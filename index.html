@@ -46,7 +46,7 @@
     <header class="relative w-full bg-team-black text-white shadow-md overflow-hidden">
       <div class="relative h-48 w-full overflow-hidden">
         <img id="header-bg-img" src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1000&q=80" alt="Okayama Girls" class="w-full h-full object-cover">
-        <div class="absolute inset-0 hero-gradient"></div>
+        
         <div class="absolute top-3 right-3 z-20 flex gap-2">
           <span id="role-badge" class="bg-black/60 text-white text-[10px] px-2.5 py-1.5 rounded-full border border-white/20">member</span>
           <button id="logout-button" type="button" class="bg-black/60 text-white text-[10px] px-2.5 py-1.5 rounded-full border border-white/20">ログアウト</button>
@@ -105,7 +105,7 @@
 
   <div id="member-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3">
-      <h3 class="font-bold text-sm">新規メンバー追加</h3>
+      <h3 id="member-modal-title" class="font-bold text-sm">新規メンバー追加</h3>
       <input type="text" id="new-mem-name" placeholder="選手のお名前" class="w-full text-base border rounded-lg p-2.5">
       <input type="number" id="new-mem-num" placeholder="背番号" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="new-mem-pos" placeholder="ポジション" class="w-full text-base border rounded-lg p-2.5">
@@ -119,7 +119,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAjKw1wfK3OzQDmSs1iSttA2BLwZ9Zxw8k",
@@ -142,6 +142,7 @@
     let currentRole = "member";
     let unsubscribeMembers = null;
     let unsubscribeHeader = null;
+    let editingMemberId = null;
 
     function showError(message) {
       loginError.textContent = message;
@@ -239,8 +240,43 @@
       grid.innerHTML = members.map(m => `
         <div class="bg-white p-3 rounded-xl border shadow-sm flex items-center space-x-3">
           <div class="w-10 h-10 rounded-full bg-team-black text-white font-black flex items-center justify-center">${escapeHtml(m.num || "0")}</div>
-          <div><div class="text-xs font-bold">${escapeHtml(m.name || "")}</div><div class="text-[10px] text-gray-400">${escapeHtml(m.pos || "選手")}</div></div>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-bold">${escapeHtml(m.name || "")}</div>
+            <div class="text-[10px] text-gray-400">${escapeHtml(m.pos || "選手")}</div>
+            ${currentRole === "admin" ? `<div class="flex gap-2 mt-2">
+              <button type="button" class="edit-member text-[10px] font-bold text-blue-600" data-id="${m.id}">編集</button>
+              <button type="button" class="delete-member text-[10px] font-bold text-red-600" data-id="${m.id}" data-name="${escapeHtml(m.name || "")}">削除</button>
+            </div>` : ""}
+          </div>
         </div>`).join("");
+
+      if (currentRole === "admin") {
+        document.querySelectorAll(".edit-member").forEach(button => {
+          button.addEventListener("click", () => {
+            const member = members.find(x => x.id === button.dataset.id);
+            if (!member) return;
+            editingMemberId = member.id;
+            document.getElementById("member-modal-title").textContent = "メンバー編集";
+            document.getElementById("new-mem-name").value = member.name || "";
+            document.getElementById("new-mem-num").value = member.num || "";
+            document.getElementById("new-mem-pos").value = member.pos || "";
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+          });
+        });
+        document.querySelectorAll(".delete-member").forEach(button => {
+          button.addEventListener("click", async () => {
+            const name = button.dataset.name || "このメンバー";
+            if (!confirm(`${name}を削除しますか？\nこの操作は元に戻せません。`)) return;
+            try {
+              await deleteDoc(doc(db, "members", button.dataset.id));
+            } catch (error) {
+              console.error("MEMBER_DELETE_ERROR", error);
+              alert("メンバーを削除できませんでした。");
+            }
+          });
+        });
+      }
 
       attendance.innerHTML = members.map(m => `
         <div class="p-3 flex justify-between items-center text-xs gap-2">
@@ -278,6 +314,11 @@
     const modal = document.getElementById("member-modal");
     document.getElementById("add-member-button").addEventListener("click", () => {
       if (currentRole !== "admin") return;
+      editingMemberId = null;
+      document.getElementById("member-modal-title").textContent = "新規メンバー追加";
+      document.getElementById("new-mem-name").value = "";
+      document.getElementById("new-mem-num").value = "";
+      document.getElementById("new-mem-pos").value = "";
       modal.classList.remove("hidden"); modal.classList.add("flex");
     });
     document.getElementById("cancel-member-button").addEventListener("click", () => {
@@ -290,14 +331,19 @@
       const pos = document.getElementById("new-mem-pos").value.trim() || "選手";
       if (!name || !num) return alert("名前と背番号を入力してください。");
       try {
-        await addDoc(collection(db, "members"), { name, num, pos, status:"未回答" });
+        if (editingMemberId) {
+          await updateDoc(doc(db, "members", editingMemberId), { name, num, pos });
+        } else {
+          await addDoc(collection(db, "members"), { name, num, pos, status:"未回答" });
+        }
+        editingMemberId = null;
         document.getElementById("new-mem-name").value = "";
         document.getElementById("new-mem-num").value = "";
         document.getElementById("new-mem-pos").value = "";
         modal.classList.add("hidden"); modal.classList.remove("flex");
       } catch (error) {
         console.error("MEMBER_WRITE_ERROR", error);
-        alert("メンバーを追加できませんでした。");
+        alert("メンバー情報を保存できませんでした。");
       }
     });
   </script>
