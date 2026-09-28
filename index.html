@@ -75,9 +75,21 @@
       </section>
 
       <section id="tab-attendance" class="tab-content hidden space-y-3">
-        <h2 class="text-base font-bold">出欠管理</h2>
-        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-          <div id="attendance-list" class="divide-y p-3 text-xs text-gray-400">データ読込中...</div>
+        <div class="flex justify-between items-center gap-2">
+          <div>
+            <h2 class="text-base font-bold">予定・出欠管理</h2>
+            <p class="text-[10px] text-gray-400">練習・試合ごとに出欠を管理します</p>
+          </div>
+          <button id="add-event-button" type="button" class="hidden bg-team-red text-white text-xs font-bold px-3 py-2 rounded-lg">予定を追加</button>
+        </div>
+        <div id="event-list" class="space-y-3"><p class="text-xs text-gray-400">予定を読み込んでいます...</p></div>
+        <div id="selected-event-panel" class="hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div class="p-4 border-b">
+            <div class="text-[10px] text-gray-400">選択中の予定</div>
+            <div id="selected-event-title" class="font-bold text-sm mt-1"></div>
+            <div id="selected-event-meta" class="text-[11px] text-gray-500 mt-1"></div>
+          </div>
+          <div id="attendance-list" class="divide-y p-3 text-xs text-gray-400">メンバーを読み込んでいます...</div>
         </div>
       </section>
 
@@ -103,6 +115,32 @@
     </nav>
   </div>
 
+
+  <div id="event-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-4 space-y-3">
+      <h3 id="event-modal-title" class="font-bold text-sm">予定を追加</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <select id="event-type" class="w-full text-base border rounded-lg p-2.5">
+          <option value="練習">練習</option>
+          <option value="試合">試合</option>
+        </select>
+        <select id="event-status" class="w-full text-base border rounded-lg p-2.5">
+          <option value="予定">予定</option>
+          <option value="中止">中止</option>
+          <option value="終了">終了</option>
+        </select>
+      </div>
+      <input type="text" id="event-name" placeholder="予定名（例：通常練習）" class="w-full text-base border rounded-lg p-2.5">
+      <input type="datetime-local" id="event-date" class="w-full text-base border rounded-lg p-2.5">
+      <input type="text" id="event-place" placeholder="場所" class="w-full text-base border rounded-lg p-2.5">
+      <input type="text" id="event-opponent" placeholder="対戦相手（試合のみ・任意）" class="w-full text-base border rounded-lg p-2.5">
+      <div class="flex space-x-2 pt-2">
+        <button id="cancel-event-button" type="button" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold">キャンセル</button>
+        <button id="save-event-button" type="button" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold">保存</button>
+      </div>
+    </div>
+  </div>
+
   <div id="member-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3">
       <h3 id="member-modal-title" class="font-bold text-sm">新規メンバー追加</h3>
@@ -119,7 +157,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAjKw1wfK3OzQDmSs1iSttA2BLwZ9Zxw8k",
@@ -143,6 +181,12 @@
     let unsubscribeMembers = null;
     let unsubscribeHeader = null;
     let editingMemberId = null;
+    let editingEventId = null;
+    let selectedEventId = null;
+    let currentMembers = [];
+    let currentEvents = [];
+    let unsubscribeEvents = null;
+    let unsubscribeAttendance = null;
 
     function showError(message) {
       loginError.textContent = message;
@@ -186,6 +230,8 @@
       if (!user) {
         if (unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
         if (unsubscribeHeader) { unsubscribeHeader(); unsubscribeHeader = null; }
+        if (unsubscribeEvents) { unsubscribeEvents(); unsubscribeEvents = null; }
+        if (unsubscribeAttendance) { unsubscribeAttendance(); unsubscribeAttendance = null; }
         appScreen.classList.add("hidden");
         loginScreen.classList.remove("hidden");
         return;
@@ -202,6 +248,7 @@
       document.getElementById("role-badge").textContent = currentRole;
       document.getElementById("welcome-user").textContent = user.email || "";
       document.getElementById("add-member-button").classList.toggle("hidden", currentRole !== "admin");
+      document.getElementById("add-event-button").classList.toggle("hidden", currentRole !== "admin");
       loginScreen.classList.add("hidden");
       appScreen.classList.remove("hidden");
       startRealtimeData();
@@ -214,10 +261,23 @@
         }, (error) => console.warn("HEADER_READ_ERROR", error));
       }
 
+      if (!unsubscribeEvents) {
+        unsubscribeEvents = onSnapshot(query(collection(db, "events"), orderBy("date", "asc")), (snapshot) => {
+          currentEvents = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
+          renderEvents();
+          document.getElementById("home-attendance-count").textContent = currentEvents.length ? `予定 ${currentEvents.length}件` : "予定はまだありません";
+        }, (error) => {
+          console.error("EVENTS_READ_ERROR", error);
+          document.getElementById("event-list").innerHTML = '<p class="text-xs text-red-600">予定を読み込めません。</p>';
+        });
+      }
+
       if (!unsubscribeMembers) {
         unsubscribeMembers = onSnapshot(collection(db, "members"), (snapshot) => {
           const members = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
+          currentMembers = members;
           renderMembers(members);
+          if (selectedEventId) watchAttendance(selectedEventId);
         }, (error) => {
           console.error("MEMBERS_READ_ERROR", error);
           document.getElementById("attendance-list").innerHTML = '<p class="p-3 text-red-600">メンバーデータを読み込めません。</p>';
@@ -228,8 +288,7 @@
     function renderMembers(members) {
       const grid = document.getElementById("member-grid");
       const attendance = document.getElementById("attendance-list");
-      const attending = members.filter(m => m.status === "出席").length;
-      document.getElementById("home-attendance-count").textContent = `出席 ${attending}名 / ${members.length}名`;
+      document.getElementById("home-attendance-count").textContent = currentEvents.length ? `予定 ${currentEvents.length}件` : "予定はまだありません";
 
       if (!members.length) {
         grid.innerHTML = '<p class="text-xs text-gray-400 col-span-2">メンバーがまだ登録されていません。</p>';
@@ -278,29 +337,176 @@
         });
       }
 
-      attendance.innerHTML = members.map(m => `
-        <div class="p-3 flex justify-between items-center text-xs gap-2">
-          <span class="font-bold">${escapeHtml(m.name || "")}</span>
-          <div class="flex gap-1">
-            ${["出席","欠席","保留"].map(s => `<button type="button" data-att-id="${m.id}" data-status="${s}" class="attendance-button px-2.5 py-1 rounded-md ${m.status===s ? "bg-team-red text-white font-bold" : "bg-gray-100 text-gray-500"}">${s}</button>`).join("")}
-          </div>
-        </div>`).join("");
-
-      document.querySelectorAll(".attendance-button").forEach(button => {
-        button.addEventListener("click", async () => {
-          try {
-            await setDoc(doc(db, "members", button.dataset.attId), { status: button.dataset.status }, { merge:true });
-          } catch (error) {
-            console.error("ATTENDANCE_WRITE_ERROR", error);
-            alert("出欠を更新できませんでした。");
-          }
-        });
-      });
+      if (!selectedEventId) {
+        attendance.innerHTML = '<p class="p-3 text-xs text-gray-400">予定を選択すると出欠を回答できます。</p>';
+      }
     }
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
     }
+
+
+    function eventDateValue(value) {
+      if (!value) return null;
+      if (typeof value.toDate === "function") return value.toDate();
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function formatEventDate(value) {
+      const d = eventDateValue(value);
+      if (!d) return "日時未設定";
+      return new Intl.DateTimeFormat("ja-JP", {year:"numeric",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit"}).format(d);
+    }
+
+    function toDateTimeLocal(value) {
+      const d = eventDateValue(value);
+      if (!d) return "";
+      const p = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function renderEvents() {
+      const list = document.getElementById("event-list");
+      if (!currentEvents.length) {
+        list.innerHTML = '<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">予定はまだありません。</div>';
+        return;
+      }
+      list.innerHTML = currentEvents.map(e => `
+        <div class="bg-white rounded-2xl border shadow-sm p-4">
+          <div class="flex justify-between gap-3">
+            <button type="button" class="select-event text-left min-w-0 flex-1" data-id="${e.id}">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold px-2 py-1 rounded-full ${e.type==="試合" ? "bg-red-50 text-team-red" : "bg-gray-100 text-gray-600"}">${escapeHtml(e.type || "予定")}</span>
+                <span class="text-[10px] text-gray-400">${escapeHtml(e.status || "予定")}</span>
+              </div>
+              <div class="font-bold text-sm mt-2">${escapeHtml(e.name || "名称未設定")}</div>
+              <div class="text-[11px] text-gray-500 mt-1">${escapeHtml(formatEventDate(e.date))}</div>
+              <div class="text-[11px] text-gray-500">${escapeHtml(e.place || "場所未設定")}${e.opponent ? " / vs " + escapeHtml(e.opponent) : ""}</div>
+            </button>
+            ${currentRole==="admin" ? `<div class="flex flex-col gap-2">
+              <button type="button" class="edit-event text-[10px] font-bold text-blue-600" data-id="${e.id}">編集</button>
+              <button type="button" class="delete-event text-[10px] font-bold text-red-600" data-id="${e.id}">削除</button>
+            </div>` : ""}
+          </div>
+        </div>`).join("");
+
+      document.querySelectorAll(".select-event").forEach(b => b.addEventListener("click", () => selectEvent(b.dataset.id)));
+      if (currentRole === "admin") {
+        document.querySelectorAll(".edit-event").forEach(b => b.addEventListener("click", () => openEventModal(b.dataset.id)));
+        document.querySelectorAll(".delete-event").forEach(b => b.addEventListener("click", async () => {
+          const e = currentEvents.find(x => x.id === b.dataset.id);
+          if (!confirm(`「${e?.name || "この予定"}」を削除しますか？`)) return;
+          try {
+            await deleteDoc(doc(db, "events", b.dataset.id));
+            if (selectedEventId === b.dataset.id) {
+              selectedEventId = null;
+              if (unsubscribeAttendance) { unsubscribeAttendance(); unsubscribeAttendance = null; }
+              document.getElementById("selected-event-panel").classList.add("hidden");
+            }
+          } catch (error) {
+            console.error("EVENT_DELETE_ERROR", error);
+            alert("予定を削除できませんでした。");
+          }
+        }));
+      }
+    }
+
+    function selectEvent(id) {
+      selectedEventId = id;
+      const e = currentEvents.find(x => x.id === id);
+      if (!e) return;
+      document.getElementById("selected-event-title").textContent = e.name || "予定";
+      document.getElementById("selected-event-meta").textContent =
+        `${formatEventDate(e.date)} / ${e.place || "場所未設定"}${e.opponent ? " / vs " + e.opponent : ""}`;
+      document.getElementById("selected-event-panel").classList.remove("hidden");
+      watchAttendance(id);
+    }
+
+    function watchAttendance(eventId) {
+      if (unsubscribeAttendance) { unsubscribeAttendance(); unsubscribeAttendance = null; }
+      unsubscribeAttendance = onSnapshot(collection(db, "events", eventId, "attendance"), (snapshot) => {
+        const statuses = {};
+        snapshot.docs.forEach(d => statuses[d.id] = d.data());
+        renderEventAttendance(eventId, statuses);
+      }, (error) => {
+        console.error("ATTENDANCE_READ_ERROR", error);
+        document.getElementById("attendance-list").innerHTML = '<p class="p-3 text-red-600">出欠データを読み込めません。</p>';
+      });
+    }
+
+    function renderEventAttendance(eventId, statuses) {
+      const box = document.getElementById("attendance-list");
+      if (!currentMembers.length) {
+        box.innerHTML = '<p class="p-3 text-xs text-gray-400">先にメンバーを登録してください。</p>';
+        return;
+      }
+      box.innerHTML = currentMembers.map(m => {
+        const status = statuses[m.id]?.status || "未回答";
+        return `<div class="p-3 flex justify-between items-center gap-2">
+          <div><div class="font-bold">${escapeHtml(m.name || "")}</div><div class="text-[10px] text-gray-400">#${escapeHtml(m.num || "")} ・ ${escapeHtml(status)}</div></div>
+          <div class="flex gap-1">
+            ${["出席","欠席","保留"].map(s => `<button type="button" data-member="${m.id}" data-status="${s}" class="event-attendance px-2.5 py-1.5 rounded-md ${status===s ? "bg-team-red text-white font-bold" : "bg-gray-100 text-gray-500"}">${s}</button>`).join("")}
+          </div>
+        </div>`;
+      }).join("");
+      document.querySelectorAll(".event-attendance").forEach(b => b.addEventListener("click", async () => {
+        try {
+          await setDoc(doc(db, "events", eventId, "attendance", b.dataset.member), {
+            status: b.dataset.status,
+            updatedAt: Timestamp.now(),
+            updatedBy: auth.currentUser?.uid || ""
+          }, {merge:true});
+        } catch (error) {
+          console.error("ATTENDANCE_WRITE_ERROR", error);
+          alert("出欠を更新できませんでした。");
+        }
+      }));
+    }
+
+    const eventModal = document.getElementById("event-modal");
+    document.getElementById("add-event-button").addEventListener("click", () => openEventModal(null));
+    document.getElementById("cancel-event-button").addEventListener("click", () => {
+      eventModal.classList.add("hidden"); eventModal.classList.remove("flex");
+    });
+
+    function openEventModal(id) {
+      if (currentRole !== "admin") return;
+      editingEventId = id;
+      const e = id ? currentEvents.find(x => x.id === id) : null;
+      document.getElementById("event-modal-title").textContent = e ? "予定を編集" : "予定を追加";
+      document.getElementById("event-type").value = e?.type || "練習";
+      document.getElementById("event-status").value = e?.status || "予定";
+      document.getElementById("event-name").value = e?.name || "";
+      document.getElementById("event-date").value = e ? toDateTimeLocal(e.date) : "";
+      document.getElementById("event-place").value = e?.place || "";
+      document.getElementById("event-opponent").value = e?.opponent || "";
+      eventModal.classList.remove("hidden"); eventModal.classList.add("flex");
+    }
+
+    document.getElementById("save-event-button").addEventListener("click", async () => {
+      if (currentRole !== "admin") return;
+      const type = document.getElementById("event-type").value;
+      const status = document.getElementById("event-status").value;
+      const name = document.getElementById("event-name").value.trim();
+      const dateText = document.getElementById("event-date").value;
+      const place = document.getElementById("event-place").value.trim();
+      const opponent = document.getElementById("event-opponent").value.trim();
+      if (!name || !dateText || !place) return alert("予定名・日時・場所を入力してください。");
+      const date = new Date(dateText);
+      if (Number.isNaN(date.getTime())) return alert("日時を確認してください。");
+      const data = {type, status, name, date:Timestamp.fromDate(date), place, opponent};
+      try {
+        if (editingEventId) await updateDoc(doc(db, "events", editingEventId), data);
+        else await addDoc(collection(db, "events"), data);
+        editingEventId = null;
+        eventModal.classList.add("hidden"); eventModal.classList.remove("flex");
+      } catch (error) {
+        console.error("EVENT_WRITE_ERROR", error);
+        alert("予定を保存できませんでした。");
+      }
+    });
 
     function switchTab(tabId) {
       document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
