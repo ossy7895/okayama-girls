@@ -4,67 +4,58 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Okayama Girls</title>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="OkayamaGirls">
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root{--primary-red:#C8102E;--team-black:#1A1A1A}
-    body{background:#F8F9FA;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;padding-bottom:85px}
-    .bg-team-red{background:var(--primary-red)} .text-team-red{color:var(--primary-red)}
-    .bg-team-black{background:var(--team-black)} .btn-active:active{transform:scale(.97)}
-    .hero-gradient{background:linear-gradient(180deg,rgba(200,16,46,.5),rgba(26,26,26,.95))}
-    .hide-scrollbar::-webkit-scrollbar{display:none}
+    :root { --primary-red:#C8102E; --team-black:#1A1A1A; }
+    body { background:#F8F9FA; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; -webkit-tap-highlight-color:transparent; }
+    .bg-team-red{background-color:var(--primary-red)} .text-team-red{color:var(--primary-red)}
+    .bg-team-black{background-color:var(--team-black)} .hero-gradient{background:linear-gradient(180deg,rgba(200,16,46,.75),rgba(26,26,26,.95))}
+    .btn-active:active{transform:scale(.97)}
   </style>
 </head>
 <body class="text-gray-800 antialiased">
 
-  <!-- ログイン画面 -->
-  <div id="login-screen" class="fixed inset-0 z-[100] bg-team-black flex items-center justify-center p-5">
-    <div class="w-full max-w-sm">
-      <div class="text-center mb-8">
-        <div class="mx-auto w-20 h-20 rounded-full bg-white text-team-red flex items-center justify-center font-black text-3xl shadow-xl border-4 border-red-600">OG</div>
-        <h1 class="text-3xl font-black text-white tracking-wider mt-4">Okayama Girls</h1>
-        <p class="text-sm text-red-200 mt-1">女子ソフトボールチーム 公式アプリ</p>
+  <!-- ログイン -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center p-5 bg-gray-100">
+    <div class="w-full max-w-sm bg-white rounded-3xl shadow-lg overflow-hidden">
+      <div class="bg-team-black text-white p-7 text-center">
+        <div class="mx-auto w-16 h-16 rounded-full bg-white text-team-red flex items-center justify-center text-2xl font-black mb-3">OG</div>
+        <h1 class="text-2xl font-black tracking-wider">Okayama Girls</h1>
+        <p class="text-xs text-gray-300 mt-1">女子ソフトボールチーム</p>
       </div>
-      <div class="bg-white rounded-3xl p-5 shadow-2xl">
-        <h2 class="font-bold text-gray-900 mb-4">ログイン</h2>
-        <label class="block text-xs font-bold text-gray-500 mb-1">メールアドレス</label>
-        <input id="login-email" type="email" autocomplete="email" class="w-full border rounded-xl p-3 text-sm mb-3" placeholder="メールアドレス">
-        <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
-        <input id="login-password" type="password" autocomplete="current-password" class="w-full border rounded-xl p-3 text-sm mb-4" placeholder="パスワード">
-        <button id="login-button" onclick="login()" class="w-full bg-team-red text-white py-3 rounded-xl font-bold shadow btn-active">
-          <i class="fa-solid fa-right-to-bracket mr-2"></i>ログイン
-        </button>
-        <p id="login-error" class="hidden text-xs text-red-600 mt-3"></p>
-        <p class="text-[10px] text-gray-400 mt-4 text-center">アカウントは管理者が登録します</p>
-      </div>
+      <form id="login-form" class="p-6 space-y-4">
+        <div>
+          <label for="login-email" class="block text-xs font-bold text-gray-600 mb-1">メールアドレス</label>
+          <input id="login-email" type="email" autocomplete="email" required class="w-full border rounded-xl p-3 text-base" placeholder="example@email.com">
+        </div>
+        <div>
+          <label for="login-password" class="block text-xs font-bold text-gray-600 mb-1">パスワード</label>
+          <input id="login-password" type="password" autocomplete="current-password" required class="w-full border rounded-xl p-3 text-base" placeholder="パスワード">
+        </div>
+        <p id="login-error" class="hidden text-sm text-red-600 bg-red-50 rounded-lg p-3"></p>
+        <button id="login-button" type="submit" class="w-full bg-team-red text-white font-bold py-3 rounded-xl shadow btn-active">ログイン</button>
+        <p id="auth-status" class="text-[11px] text-center text-gray-400">Firebase認証</p>
+      </form>
     </div>
   </div>
 
-  <!-- アプリ本体 -->
-  <div id="app-shell" class="hidden">
+  <!-- アプリ -->
+  <div id="app-screen" class="hidden pb-24">
     <header class="relative w-full bg-team-black text-white shadow-md overflow-hidden">
       <div class="relative h-48 w-full overflow-hidden">
         <img id="header-bg-img" src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1000&q=80" alt="Okayama Girls" class="w-full h-full object-cover">
         <div class="absolute inset-0 hero-gradient"></div>
+        <div class="absolute top-3 right-3 z-20 flex gap-2">
+          <span id="role-badge" class="bg-black/60 text-white text-[10px] px-2.5 py-1.5 rounded-full border border-white/20">member</span>
+          <button id="logout-button" type="button" class="bg-black/60 text-white text-[10px] px-2.5 py-1.5 rounded-full border border-white/20">ログアウト</button>
+        </div>
         <div class="absolute bottom-3 left-4 right-4 z-10">
           <div class="flex items-center space-x-3">
-            <div class="w-12 h-12 rounded-full bg-white text-team-red flex items-center justify-center font-black text-xl shadow-lg border-2 border-red-600">OG</div>
-            <div class="min-w-0">
-              <h1 class="text-2xl font-black tracking-wider text-white">Okayama Girls</h1>
-              <p class="text-xs text-red-200 font-medium">女子ソフトボールチーム 公式アプリ</p>
-            </div>
+            <div class="w-12 h-12 rounded-full bg-white text-team-red flex items-center justify-center font-black text-xl border-2 border-red-600">OG</div>
+            <div><h1 class="text-2xl font-black tracking-wider">Okayama Girls</h1><p class="text-xs text-red-200">女子ソフトボールチーム 公式アプリ</p></div>
           </div>
-        </div>
-      </div>
-      <div class="bg-team-black px-4 py-2 flex items-center justify-between">
-        <span id="current-user-label" class="text-[11px] text-gray-300 truncate"></span>
-        <div class="flex items-center gap-2">
-          <span id="role-badge" class="text-[10px] px-2 py-1 rounded-full bg-white/10 text-gray-200"></span>
-          <button onclick="logout()" class="text-[11px] text-red-200 font-bold">ログアウト</button>
         </div>
       </div>
     </header>
@@ -72,80 +63,55 @@
     <main class="p-4 max-w-md mx-auto">
       <section id="tab-home" class="tab-content space-y-4">
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-xs font-bold text-gray-400">2026シーズン</span>
-            <span class="text-xs bg-red-50 text-team-red font-bold px-2 py-0.5 rounded">チーム情報</span>
-          </div>
-          <div class="text-3xl font-black text-gray-900">Okayama Girls</div>
-          <p class="text-xs text-gray-500 mt-1">ログイン認証済み</p>
+          <div class="text-xs font-bold text-gray-400">Okayama Girls</div>
+          <div class="text-xl font-black mt-1">チーム管理アプリ</div>
+          <p id="welcome-user" class="text-xs text-gray-500 mt-2"></p>
         </div>
         <div class="bg-white rounded-2xl p-4 shadow-md border-l-4 border-team-red">
-          <div class="flex justify-between items-center mb-1">
-            <span class="bg-red-100 text-team-red text-[11px] font-bold px-2.5 py-0.5 rounded-full">次回イベント</span>
-            <span class="text-xs font-bold text-gray-500" id="home-attendance-count">出欠確認中...</span>
-          </div>
-          <h2 class="text-base font-bold text-gray-900 mt-1">岡山県秋季ソフトボール大会 1回戦</h2>
-          <div class="mt-2 text-xs text-gray-600 space-y-1">
-            <p><i class="fa-regular fa-clock w-4 text-team-red"></i> 2026年10月11日 09:30〜</p>
-            <p><i class="fa-solid fa-location-dot w-4 text-team-red"></i> 倉敷市運動公園野球場</p>
-          </div>
+          <span class="bg-red-100 text-team-red text-[11px] font-bold px-2.5 py-0.5 rounded-full">出欠状況</span>
+          <p id="home-attendance-count" class="text-sm font-bold mt-3">読込中...</p>
         </div>
+        <button type="button" data-tab="attendance" class="tab-link w-full bg-team-red text-white p-4 rounded-2xl text-left font-bold">出欠を確認・回答する</button>
       </section>
 
       <section id="tab-attendance" class="tab-content hidden space-y-3">
-        <div class="flex justify-between items-center">
-          <h2 class="text-base font-bold text-gray-900">出欠管理</h2>
-          <span class="text-[10px] text-gray-400">※現在は既存データを表示</span>
-        </div>
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div id="attendance-list" class="divide-y divide-gray-100 p-3 text-xs text-gray-400">データ読込中...</div>
+        <h2 class="text-base font-bold">出欠管理</h2>
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div id="attendance-list" class="divide-y p-3 text-xs text-gray-400">データ読込中...</div>
         </div>
       </section>
 
       <section id="tab-stats" class="tab-content hidden space-y-4">
-        <h2 class="text-base font-bold text-gray-900">チーム・個人成績</h2>
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-xs text-gray-500">
-          <p class="font-bold text-gray-800 mb-2">次の工程でFirestore連携します</p>
-          <p>試合ごとの成績・通算成績・投手成績を完成版として実装します。</p>
-        </div>
+        <h2 class="text-base font-bold">チーム・個人成績</h2>
+        <div class="bg-white rounded-2xl shadow-sm border p-4 text-xs text-gray-500">成績機能は次の段階でFirestore連携します。</div>
       </section>
 
       <section id="tab-members" class="tab-content hidden space-y-3">
         <div class="flex justify-between items-center">
-          <h2 class="text-base font-bold text-gray-900">メンバー名鑑</h2>
-          <button id="add-member-button" onclick="openAddMemberModal()" class="hidden bg-team-red text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow btn-active">
-            <i class="fa-solid fa-user-plus mr-1"></i>追加
-          </button>
+          <h2 class="text-base font-bold">メンバー名鑑</h2>
+          <button id="add-member-button" type="button" class="hidden bg-team-red text-white text-xs font-bold px-3 py-2 rounded-lg">追加</button>
         </div>
         <div id="member-grid" class="grid grid-cols-2 gap-3"></div>
       </section>
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 py-2 px-4 flex justify-around items-center z-40 shadow-lg">
-      <button onclick="switchTab('home')" id="nav-home" class="nav-btn flex flex-col items-center text-team-red">
-        <i class="fa-solid fa-house text-lg"></i><span class="text-[10px] font-bold mt-0.5">ホーム</span>
-      </button>
-      <button onclick="switchTab('attendance')" id="nav-attendance" class="nav-btn flex flex-col items-center text-gray-400">
-        <i class="fa-solid fa-user-check text-lg"></i><span class="text-[10px] font-bold mt-0.5">出欠</span>
-      </button>
-      <button onclick="switchTab('stats')" id="nav-stats" class="nav-btn flex flex-col items-center text-gray-400">
-        <i class="fa-solid fa-chart-column text-lg"></i><span class="text-[10px] font-bold mt-0.5">成績</span>
-      </button>
-      <button onclick="switchTab('members')" id="nav-members" class="nav-btn flex flex-col items-center text-gray-400">
-        <i class="fa-solid fa-users text-lg"></i><span class="text-[10px] font-bold mt-0.5">メンバー</span>
-      </button>
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t py-2 px-4 flex justify-around z-40">
+      <button type="button" data-tab="home" class="nav-btn tab-link flex flex-col items-center text-team-red"><i class="fa-solid fa-house text-lg"></i><span class="text-[10px] font-bold">ホーム</span></button>
+      <button type="button" data-tab="attendance" class="nav-btn tab-link flex flex-col items-center text-gray-400"><i class="fa-solid fa-user-check text-lg"></i><span class="text-[10px] font-bold">出欠</span></button>
+      <button type="button" data-tab="stats" class="nav-btn tab-link flex flex-col items-center text-gray-400"><i class="fa-solid fa-chart-column text-lg"></i><span class="text-[10px] font-bold">成績</span></button>
+      <button type="button" data-tab="members" class="nav-btn tab-link flex flex-col items-center text-gray-400"><i class="fa-solid fa-users text-lg"></i><span class="text-[10px] font-bold">メンバー</span></button>
     </nav>
+  </div>
 
-    <div id="member-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4">
-      <div class="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3">
-        <h3 class="font-bold text-gray-900 text-sm">新規メンバー追加</h3>
-        <input type="text" id="new-mem-name" placeholder="選手のお名前" class="w-full text-xs border rounded-lg p-2.5">
-        <input type="number" id="new-mem-num" placeholder="背番号" class="w-full text-xs border rounded-lg p-2.5">
-        <input type="text" id="new-mem-pos" placeholder="ポジション" class="w-full text-xs border rounded-lg p-2.5">
-        <div class="flex space-x-2 pt-2">
-          <button onclick="closeAddMemberModal()" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold text-gray-600">キャンセル</button>
-          <button onclick="saveNewMember()" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold shadow">保存</button>
-        </div>
+  <div id="member-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3">
+      <h3 class="font-bold text-sm">新規メンバー追加</h3>
+      <input type="text" id="new-mem-name" placeholder="選手のお名前" class="w-full text-base border rounded-lg p-2.5">
+      <input type="number" id="new-mem-num" placeholder="背番号" class="w-full text-base border rounded-lg p-2.5">
+      <input type="text" id="new-mem-pos" placeholder="ポジション" class="w-full text-base border rounded-lg p-2.5">
+      <div class="flex space-x-2 pt-2">
+        <button id="cancel-member-button" type="button" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold">キャンセル</button>
+        <button id="save-member-button" type="button" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold">保存</button>
       </div>
     </div>
   </div>
@@ -168,175 +134,171 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    let currentUser = null;
+    const loginScreen = document.getElementById("login-screen");
+    const appScreen = document.getElementById("app-screen");
+    const loginForm = document.getElementById("login-form");
+    const loginError = document.getElementById("login-error");
+    const loginButton = document.getElementById("login-button");
     let currentRole = "member";
-    let membersArr = [];
+    let unsubscribeMembers = null;
+    let unsubscribeHeader = null;
 
-    function showLoginError(message) {
-      const el = document.getElementById("login-error");
-      el.textContent = message;
-      el.classList.remove("hidden");
+    function showError(message) {
+      loginError.textContent = message;
+      loginError.classList.remove("hidden");
+    }
+    function clearError() {
+      loginError.textContent = "";
+      loginError.classList.add("hidden");
+    }
+    function friendlyAuthError(error) {
+      const code = error?.code || "";
+      if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) return "メールアドレスまたはパスワードを確認してください。";
+      if (code.includes("too-many-requests")) return "試行回数が多いため一時的に制限されています。少し時間をおいてください。";
+      if (code.includes("network-request-failed")) return "ネットワーク接続を確認してください。";
+      return "ログインできませんでした。(" + (code || "unknown") + ")";
     }
 
-    window.login = async function() {
-      const email = document.getElementById("login-email").value.trim();
-      const password = document.getElementById("login-password").value;
-      document.getElementById("login-error").classList.add("hidden");
-      if (!email || !password) {
-        showLoginError("メールアドレスとパスワードを入力してください。");
-        return;
-      }
-      const button = document.getElementById("login-button");
-      button.disabled = true;
-      button.textContent = "ログイン中...";
+    loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearError();
+      loginButton.disabled = true;
+      loginButton.textContent = "ログイン中...";
       try {
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value;
         await signInWithEmailAndPassword(auth, email, password);
       } catch (error) {
-        console.error(error);
-        showLoginError("ログインできませんでした。メールアドレスまたはパスワードを確認してください。");
+        console.error("LOGIN_ERROR", error);
+        showError(friendlyAuthError(error));
       } finally {
-        button.disabled = false;
-        button.innerHTML = '<i class="fa-solid fa-right-to-bracket mr-2"></i>ログイン';
+        loginButton.disabled = false;
+        loginButton.textContent = "ログイン";
       }
-    };
+    });
 
-    window.logout = async function() {
+    document.getElementById("logout-button").addEventListener("click", async () => {
       await signOut(auth);
-    };
+    });
 
     onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
       if (!user) {
-        document.getElementById("login-screen").classList.remove("hidden");
-        document.getElementById("app-shell").classList.add("hidden");
+        if (unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
+        if (unsubscribeHeader) { unsubscribeHeader(); unsubscribeHeader = null; }
+        appScreen.classList.add("hidden");
+        loginScreen.classList.remove("hidden");
         return;
       }
 
-      document.getElementById("login-screen").classList.add("hidden");
-      document.getElementById("app-shell").classList.remove("hidden");
-      document.getElementById("current-user-label").textContent = user.email || "";
-
+      currentRole = "member";
       try {
         const userSnap = await getDoc(doc(db, "users", user.uid));
-        currentRole = userSnap.exists() && userSnap.data().role === "admin" ? "admin" : "member";
+        if (userSnap.exists() && userSnap.data().role) currentRole = userSnap.data().role;
       } catch (error) {
-        console.error("users読み込みエラー:", error);
-        currentRole = "member";
+        console.warn("USER_PROFILE_READ_ERROR", error);
       }
 
-      const badge = document.getElementById("role-badge");
-      badge.textContent = currentRole === "admin" ? "管理者" : "メンバー";
-      if (currentRole === "admin") {
-        document.getElementById("add-member-button").classList.remove("hidden");
-      } else {
-        document.getElementById("add-member-button").classList.add("hidden");
-      }
-
+      document.getElementById("role-badge").textContent = currentRole;
+      document.getElementById("welcome-user").textContent = user.email || "";
+      document.getElementById("add-member-button").classList.toggle("hidden", currentRole !== "admin");
+      loginScreen.classList.add("hidden");
+      appScreen.classList.remove("hidden");
       startRealtimeData();
     });
 
     function startRealtimeData() {
-      onSnapshot(doc(db, "settings", "header"), (snap) => {
-        if (snap.exists() && snap.data().url) {
-          document.getElementById("header-bg-img").src = snap.data().url;
-        }
-      });
+      if (!unsubscribeHeader) {
+        unsubscribeHeader = onSnapshot(doc(db, "settings", "header"), (snap) => {
+          if (snap.exists() && snap.data().url) document.getElementById("header-bg-img").src = snap.data().url;
+        }, (error) => console.warn("HEADER_READ_ERROR", error));
+      }
 
-      onSnapshot(collection(db, "members"), (snapshot) => {
-        membersArr = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
-        renderMembers();
-        renderAttendance();
-      }, (error) => {
-        console.error("members読み込みエラー:", error);
-        document.getElementById("member-grid").innerHTML =
-          '<p class="text-xs text-red-500 col-span-2 text-center py-4">メンバーデータを読み込めませんでした。</p>';
-      });
+      if (!unsubscribeMembers) {
+        unsubscribeMembers = onSnapshot(collection(db, "members"), (snapshot) => {
+          const members = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
+          renderMembers(members);
+        }, (error) => {
+          console.error("MEMBERS_READ_ERROR", error);
+          document.getElementById("attendance-list").innerHTML = '<p class="p-3 text-red-600">メンバーデータを読み込めません。</p>';
+        });
+      }
     }
 
-    function renderMembers() {
+    function renderMembers(members) {
       const grid = document.getElementById("member-grid");
-      if (!membersArr.length) {
-        grid.innerHTML = '<p class="text-xs text-gray-400 col-span-2 text-center py-4">メンバーを追加してください</p>';
+      const attendance = document.getElementById("attendance-list");
+      const attending = members.filter(m => m.status === "出席").length;
+      document.getElementById("home-attendance-count").textContent = `出席 ${attending}名 / ${members.length}名`;
+
+      if (!members.length) {
+        grid.innerHTML = '<p class="text-xs text-gray-400 col-span-2">メンバーがまだ登録されていません。</p>';
+        attendance.innerHTML = '<p class="p-3 text-xs text-gray-400">メンバーがまだ登録されていません。</p>';
         return;
       }
-      grid.innerHTML = membersArr.map(m => `
-        <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-full bg-team-black text-white font-black flex items-center justify-center text-sm">${escapeHtml(m.num || "0")}</div>
-          <div>
-            <div class="text-xs font-bold text-gray-900">${escapeHtml(m.name || "")}</div>
-            <div class="text-[10px] text-gray-400">${escapeHtml(m.pos || "選手")}</div>
+
+      grid.innerHTML = members.map(m => `
+        <div class="bg-white p-3 rounded-xl border shadow-sm flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-full bg-team-black text-white font-black flex items-center justify-center">${escapeHtml(m.num || "0")}</div>
+          <div><div class="text-xs font-bold">${escapeHtml(m.name || "")}</div><div class="text-[10px] text-gray-400">${escapeHtml(m.pos || "選手")}</div></div>
+        </div>`).join("");
+
+      attendance.innerHTML = members.map(m => `
+        <div class="p-3 flex justify-between items-center text-xs gap-2">
+          <span class="font-bold">${escapeHtml(m.name || "")}</span>
+          <div class="flex gap-1">
+            ${["出席","欠席","保留"].map(s => `<button type="button" data-att-id="${m.id}" data-status="${s}" class="attendance-button px-2.5 py-1 rounded-md ${m.status===s ? "bg-team-red text-white font-bold" : "bg-gray-100 text-gray-500"}">${s}</button>`).join("")}
           </div>
-        </div>
-      `).join("");
+        </div>`).join("");
+
+      document.querySelectorAll(".attendance-button").forEach(button => {
+        button.addEventListener("click", async () => {
+          try {
+            await setDoc(doc(db, "members", button.dataset.attId), { status: button.dataset.status }, { merge:true });
+          } catch (error) {
+            console.error("ATTENDANCE_WRITE_ERROR", error);
+            alert("出欠を更新できませんでした。");
+          }
+        });
+      });
     }
 
-    function renderAttendance() {
-      const list = document.getElementById("attendance-list");
-      if (!membersArr.length) {
-        list.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">メンバーがまだ登録されていません</p>';
-        document.getElementById("home-attendance-count").textContent = "出欠未登録";
-        return;
-      }
-      const count = membersArr.filter(m => m.status === "出席").length;
-      document.getElementById("home-attendance-count").innerHTML =
-        `<i class="fa-solid fa-users mr-1"></i>既存データ：出席 ${count}名`;
-      list.innerHTML = membersArr.map(m => `
-        <div class="p-3 flex justify-between items-center text-xs">
-          <span class="font-bold text-gray-800">${escapeHtml(m.name || "")}</span>
-          <span class="px-2.5 py-1 rounded-full ${m.status === "出席" ? "bg-red-100 text-team-red font-bold" : m.status === "欠席" ? "bg-gray-200 text-gray-500" : "bg-yellow-100 text-yellow-700"}">${escapeHtml(m.status || "未回答")}</span>
-        </div>
-      `).join("");
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
     }
 
-    window.openAddMemberModal = function() {
-      if (currentRole !== "admin") return alert("メンバー追加は管理者のみ利用できます。");
-      document.getElementById("member-modal").classList.remove("hidden");
-    };
-    window.closeAddMemberModal = function() {
-      document.getElementById("member-modal").classList.add("hidden");
-    };
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
+      document.querySelectorAll(".nav-btn").forEach(el => { el.classList.remove("text-team-red"); el.classList.add("text-gray-400"); });
+      document.getElementById("tab-" + tabId)?.classList.remove("hidden");
+      const nav = document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
+      if (nav) { nav.classList.remove("text-gray-400"); nav.classList.add("text-team-red"); }
+    }
+    document.querySelectorAll(".tab-link").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
-    window.saveNewMember = async function() {
-      if (currentRole !== "admin") return alert("管理者権限が必要です。");
+    const modal = document.getElementById("member-modal");
+    document.getElementById("add-member-button").addEventListener("click", () => {
+      if (currentRole !== "admin") return;
+      modal.classList.remove("hidden"); modal.classList.add("flex");
+    });
+    document.getElementById("cancel-member-button").addEventListener("click", () => {
+      modal.classList.add("hidden"); modal.classList.remove("flex");
+    });
+    document.getElementById("save-member-button").addEventListener("click", async () => {
+      if (currentRole !== "admin") return alert("管理者のみ追加できます。");
       const name = document.getElementById("new-mem-name").value.trim();
       const num = document.getElementById("new-mem-num").value.trim();
-      const pos = document.getElementById("new-mem-pos").value.trim() || "内野手";
+      const pos = document.getElementById("new-mem-pos").value.trim() || "選手";
       if (!name || !num) return alert("名前と背番号を入力してください。");
       try {
-        await addDoc(collection(db, "members"), { name, num, pos, status: "未回答" });
+        await addDoc(collection(db, "members"), { name, num, pos, status:"未回答" });
         document.getElementById("new-mem-name").value = "";
         document.getElementById("new-mem-num").value = "";
         document.getElementById("new-mem-pos").value = "";
-        closeAddMemberModal();
+        modal.classList.add("hidden"); modal.classList.remove("flex");
       } catch (error) {
-        console.error(error);
+        console.error("MEMBER_WRITE_ERROR", error);
         alert("メンバーを追加できませんでした。");
       }
-    };
-
-    function escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, c => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-      }[c]));
-    }
-
-    window.switchTab = function(tabId) {
-      document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
-      document.querySelectorAll(".nav-btn").forEach(el => {
-        el.classList.remove("text-team-red");
-        el.classList.add("text-gray-400");
-      });
-      const tab = document.getElementById(`tab-${tabId}`);
-      const nav = document.getElementById(`nav-${tabId}`);
-      if (tab) tab.classList.remove("hidden");
-      if (nav) {
-        nav.classList.remove("text-gray-400");
-        nav.classList.add("text-team-red");
-      }
-    };
-
-    document.getElementById("login-password").addEventListener("keydown", e => {
-      if (e.key === "Enter") window.login();
     });
   </script>
 </body>
