@@ -224,7 +224,7 @@
             <div class="min-w-0 flex-1">
               <div class="home-kicker"><i class="fa-solid fa-bullhorn mr-1"></i>NOTICE</div>
               <div class="text-sm font-black mt-1">連絡事項</div>
-              <div id="home-notice-text" class="text-xs text-gray-600 mt-2 whitespace-pre-wrap break-words">読込中...</div>
+              <div id="home-notice-text" class="mt-2 space-y-2"><p class="text-xs text-gray-500">読込中...</p></div>
             </div>
             <button id="edit-notice-button" type="button" class="shrink-0 text-[10px] font-black text-team-red bg-red-50 px-3 py-2 rounded-xl">編集</button>
           </div>
@@ -453,8 +453,8 @@
 
   <div id="notice-modal" class="fixed inset-0 bg-black/70 z-[180] hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-sm rounded-2xl p-4 space-y-3">
-      <div class="flex items-center gap-2"><i class="fa-solid fa-bullhorn text-team-red"></i><h3 class="font-black text-sm">連絡事項を編集</h3></div>
-      <textarea id="notice-input" rows="7" maxlength="1000" placeholder="チームへの連絡事項を入力してください" class="w-full text-base border rounded-xl p-3 resize-none"></textarea>
+      <div class="flex items-center gap-2"><i class="fa-solid fa-bullhorn text-team-red"></i><h3 class="font-black text-sm">連絡事項を追加</h3></div>
+      <textarea id="notice-input" rows="7" maxlength="1000" placeholder="チームへの連絡事項を入力してください（日付は自動で付きます）" class="w-full text-base border rounded-xl p-3 resize-none"></textarea>
       <div class="text-[10px] text-gray-400">管理者・メンバーのどちらも編集できます。</div>
       <div class="flex gap-2 pt-1">
         <button id="cancel-notice-button" type="button" class="flex-1 bg-gray-100 py-3 rounded-xl text-xs font-bold">キャンセル</button>
@@ -636,13 +636,23 @@
       }
 
       if (!unsubscribeNotice) {
-        unsubscribeNotice = onSnapshot(doc(db, "notices", "home"), (snap) => {
-          const text = snap.exists() ? String(snap.data().text || "").trim() : "";
-          document.getElementById("home-notice-text").textContent = text || "連絡事項はありません";
+        unsubscribeNotice = onSnapshot(query(collection(db, "notices"), orderBy("createdAt", "desc")), (snapshot) => {
+          const wrap = document.getElementById("home-notice-text");
+          const notices = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
+          if (!notices.length) {
+            wrap.innerHTML = '<p class="text-xs text-gray-500">連絡事項はありません</p>';
+            return;
+          }
+          wrap.innerHTML = notices.map(n => {
+            const safeText = String(n.text || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+            const safeDate = String(n.dateLabel || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+            return `<div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2"><p class="text-xs text-gray-700 whitespace-pre-wrap break-words"><span class="font-black text-team-red">${safeDate}</span>${safeDate ? ' ' : ''}${safeText}</p></div>`;
+          }).join("");
         }, (error) => {
           console.warn("NOTICE_READ_ERROR", error);
-          document.getElementById("home-notice-text").textContent = "連絡事項を読み込めません。";
+          document.getElementById("home-notice-text").innerHTML = '<p class="text-xs text-red-600">連絡事項を読み込めません。</p>';
         });
+        cleanupOldNotices();
       }
 
       if (!unsubscribeEvents) {
@@ -1512,21 +1522,51 @@
     document.getElementById("pitching-stats-button")?.addEventListener("click",()=>{statsDisplayMode="pitching"; document.getElementById("pitching-stats-button").className="bg-team-red text-white rounded-lg py-2 text-xs font-black"; document.getElementById("batting-stats-button").className="bg-gray-100 text-gray-500 rounded-lg py-2 text-xs font-black"; renderPlayerStatsDashboard();});
 
     const noticeModal = document.getElementById("notice-modal");
-    document.getElementById("edit-notice-button")?.addEventListener("click", async () => {
+
+    function noticeDateLabel(date = new Date()) {
+      const yy = String(date.getFullYear()).slice(-2);
+      return `【${yy}.${date.getMonth() + 1}.${date.getDate()}】`;
+    }
+
+    async function cleanupOldNotices() {
       try {
-        const snap = await getDoc(doc(db, "notices", "home"));
-        document.getElementById("notice-input").value = snap.exists() ? (snap.data().text || "") : "";
-      } catch (e) { document.getElementById("notice-input").value = ""; }
+        const cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 3);
+        const snap = await getDocs(collection(db, "notices"));
+        const jobs = [];
+        snap.forEach(d => {
+          const data = d.data();
+          const created = data.createdAt?.toDate?.();
+          if (created && created < cutoff) jobs.push(deleteDoc(doc(db, "notices", d.id)));
+        });
+        if (jobs.length) await Promise.all(jobs);
+      } catch (error) {
+        console.warn("NOTICE_CLEANUP_ERROR", error);
+      }
+    }
+
+    document.getElementById("edit-notice-button")?.addEventListener("click", () => {
+      document.getElementById("notice-input").value = "";
       noticeModal.classList.remove("hidden"); noticeModal.classList.add("flex");
     });
     document.getElementById("cancel-notice-button")?.addEventListener("click", () => { noticeModal.classList.add("hidden"); noticeModal.classList.remove("flex"); });
     document.getElementById("save-notice-button")?.addEventListener("click", async () => {
       const button = document.getElementById("save-notice-button");
       const text = document.getElementById("notice-input").value.trim();
+      if (!text) { alert("連絡事項を入力してください。"); return; }
       const original = button.textContent; button.disabled = true; button.textContent = "保存中...";
       try {
-        await setDoc(doc(db, "notices", "home"), { text, updatedAt: Timestamp.now(), updatedBy: auth.currentUser?.uid || "" }, { merge:true });
+        const now = Timestamp.now();
+        await addDoc(collection(db, "notices"), {
+          text,
+          dateLabel: noticeDateLabel(),
+          createdAt: now,
+          updatedAt: now,
+          updatedBy: auth.currentUser?.uid || ""
+        });
+        document.getElementById("notice-input").value = "";
         noticeModal.classList.add("hidden"); noticeModal.classList.remove("flex");
+        cleanupOldNotices();
       } catch (error) { console.error("NOTICE_WRITE_ERROR", error); alert("連絡事項を保存できませんでした。Firestoreルールを確認してください。"); }
       finally { button.disabled = false; button.textContent = original; }
     });
