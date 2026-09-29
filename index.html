@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.9</title>
+  <title>Okayama Girls v7.10</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -135,7 +135,7 @@
     }
 
 
-    /* v7.9 Standard Red: white + team red + dark navy. LIVE operation layout remains unchanged. */
+    /* v7.10 Standard Red: white + team red + dark navy. LIVE operation layout remains unchanged. */
     :root { --primary-red:#C8102E; --team-black:#101827; --team-navy:#101827; --soft-red:#FFF1F3; --line:#E7EAF0; }
     body { background:#F6F7F9; color:#101827; }
     #app-screen > header { background:#101827; }
@@ -146,7 +146,7 @@
     /* Header photo stays natural color: no color overlay/filter. */
     #header-bg-img { filter:none !important; opacity:1 !important; }
 
-    /* v7.9 batting detail modal */
+    /* v7.10 batting detail modal */
     #stat-detail-modal { position:fixed; inset:0; z-index:220; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(16,24,39,.58); }
     #stat-detail-modal.hidden { display:none; }
     .stat-detail-card { width:min(100%,390px); background:#fff; color:#101827; border-radius:22px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.28); }
@@ -432,7 +432,7 @@
   </div>
 
 
-  <!-- v7.9 batting-stat detail -->
+  <!-- v7.10 batting-stat detail -->
   <div id="stat-detail-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stat-detail-title">
     <div class="stat-detail-card">
       <div class="flex items-start justify-between gap-3">
@@ -1276,25 +1276,53 @@
       const box=document.getElementById("player-stats-list");
       const summary=document.getElementById("stats-summary");
       if(!box||!summary) return;
-      box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">成績を読み込んでいます...</div>';
+      box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">プレイログから成績を再計算しています...</div>';
       try {
         const gameSnap=await getDocs(collection(db,"games"));
         const finished=gameSnap.docs.filter(d=>d.data()?.status==="finished");
         const totals=new Map();
+        let rebuiltGames=0;
+        let totalLogs=0;
+
+        const ensureTotal=(id,st)=>{
+          if(!totals.has(id)) totals.set(id,{memberId:id,name:st?.name||"",num:st?.num||"",pa:0,ab:0,h:0,doubles:0,triples:0,hr:0,rbi:0,bb:0,hbp:0,k:0,sh:0,sf:0,sb:0,pOuts:0,pH:0,pHR:0,pBB:0,pHBP:0,pK:0,pRuns:0,games:0});
+          return totals.get(id);
+        };
+
+        // v7.10: playerStats の保存有無に依存せず、終了済みゲームの logs を原本として毎回再計算する。
         for(const gd of finished){
-          const ps=await getDocs(collection(db,"games",gd.id,"playerStats"));
-          ps.forEach(sd=>{
-            const v=sd.data()||{}; const id=sd.id;
-            if(!totals.has(id)) totals.set(id,{memberId:id,name:v.name||"",num:v.num||"",pa:0,ab:0,h:0,doubles:0,triples:0,hr:0,rbi:0,bb:0,hbp:0,k:0,sh:0,sf:0,sb:0,pOuts:0,pH:0,pHR:0,pBB:0,pHBP:0,pK:0,pRuns:0,games:0});
-            const t=totals.get(id); t.games++;
-            ["pa","ab","h","doubles","triples","hr","rbi","bb","hbp","k","sh","sf","sb","pOuts","pH","pHR","pBB","pHBP","pK","pRuns"].forEach(k=>t[k]+=n(v[k]));
-            if(!t.name&&v.name)t.name=v.name; if(!t.num&&v.num)t.num=v.num;
-          });
+          const game=gd.data()||{};
+          const logs=Array.isArray(game.logs)?game.logs:[];
+          if(!logs.length) continue;
+          rebuiltGames++;
+          totalLogs+=logs.length;
+          const perGame=calculatePlayerStatsFromLogs(logs);
+          for(const [id,st] of perGame.entries()){
+            const t=ensureTotal(id,st);
+            t.games++;
+            const b=st.batting||{};
+            const p=st.pitching||{};
+            t.pa+=n(b.pa); t.ab+=n(b.ab); t.h+=n(b.h); t.doubles+=n(b.doubles); t.triples+=n(b.triples); t.hr+=n(b.hr); t.rbi+=n(b.rbi); t.bb+=n(b.bb); t.hbp+=n(b.hbp); t.k+=n(b.so); t.sh+=n(b.sh); t.sf+=n(b.sf); t.sb+=n(b.sb);
+            t.pOuts+=n(p.outs); t.pH+=n(p.h); t.pHR+=n(p.hr); t.pBB+=n(p.bb); t.pHBP+=n(p.hbp); t.pK+=n(p.so); t.pRuns+=n(p.runs);
+            if(!t.name&&st.name)t.name=st.name;
+            if(!t.num&&st.num)t.num=st.num;
+          }
         }
-        seasonPlayerStats=[...totals.values()].map(t=>{ const m=currentMembers.find(x=>x.id===t.memberId); return {...t,name:m?.name||t.name||"選手",num:m?.num||t.num||""}; }).sort((a,b)=>String(a.num).localeCompare(String(b.num),"ja",{numeric:true}));
-        summary.textContent=`終了試合 ${finished.length}試合から集計`;
+
+        seasonPlayerStats=[...totals.values()].map(t=>{
+          const m=currentMembers.find(x=>x.id===t.memberId);
+          return {...t,name:m?.name||t.name||"選手",num:m?.num||t.num||""};
+        }).sort((a,b)=>String(a.num).localeCompare(String(b.num),"ja",{numeric:true}));
+
+        if(!finished.length) summary.textContent="終了済みの試合はまだありません";
+        else if(!rebuiltGames) summary.textContent=`終了試合 ${finished.length}試合・集計可能なプレイログなし`;
+        else summary.textContent=`終了試合 ${finished.length}試合 / プレイログ ${totalLogs}件から再計算`;
         renderPlayerStatsDashboard();
-      } catch(e){ console.error("STATS_DASHBOARD_ERROR",e); summary.textContent="読込エラー"; box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-red-600">成績を読み込めませんでした。</div>'; }
+      } catch(e){
+        console.error("STATS_DASHBOARD_ERROR",e);
+        summary.textContent="読込エラー";
+        box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-red-600">成績を読み込めませんでした。</div>';
+      }
     }
 
     function renderPlayerStatsDashboard(){
