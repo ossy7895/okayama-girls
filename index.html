@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.2</title>
+  <title>Okayama Girls v7.4</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -75,6 +75,30 @@
       .count-panel-large .count-row { grid-template-columns:28px 1fr; column-gap:.6rem; }
       .count-panel-large .count-lamp { width:23px; height:23px; }
       .count-panel-large .count-controls { gap:.35rem; }
+    }
+
+    /* v7.4: keep approved B/S/O layout while restoring results + play log on short phones */
+    #live-game-panel.live-fullscreen .live-body { gap:.42rem; padding:.5rem .6rem .6rem; }
+    #live-game-panel.live-fullscreen .live-lower { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-right:1px; display:flex; flex-direction:column; gap:.45rem; }
+    #live-game-panel.live-fullscreen .live-lower::-webkit-scrollbar { width:3px; }
+    #live-game-panel.live-fullscreen .live-lower::-webkit-scrollbar-thumb { background:rgba(255,255,255,.22); border-radius:999px; }
+    #live-game-panel.live-fullscreen .play-log-box { flex:0 0 auto; min-height:72px; }
+    #live-game-panel.live-fullscreen #play-log { max-height:120px; overflow:auto; }
+    #live-game-panel.live-fullscreen #result-buttons .result-btn { padding:.42rem .2rem; line-height:1.1; }
+    #live-game-panel.live-fullscreen .count-panel-large { padding:.42rem .65rem; }
+    #live-game-panel.live-fullscreen .count-panel-large .count-board { gap:.34rem; }
+    #live-game-panel.live-fullscreen .count-panel-large .count-lamp { width:22px; height:22px; }
+    #live-game-panel.live-fullscreen .count-panel-large .count-controls { margin-top:.42rem; gap:.42rem; }
+    #live-game-panel.live-fullscreen .count-panel-large .count-controls button { min-height:36px; padding:.3rem 0; }
+    #live-game-panel.live-fullscreen .scoreboard-full { padding:.42rem .5rem; }
+    #live-game-panel.live-fullscreen .scoreboard-head { margin-bottom:.2rem; }
+    @media (max-height:720px) {
+      #live-game-panel.live-fullscreen > .p-4 { padding:.55rem .7rem; }
+      #live-game-panel.live-fullscreen .live-body { gap:.32rem; padding:.4rem .5rem .5rem; }
+      #live-game-panel.live-fullscreen .count-panel-large .count-board { gap:.25rem; }
+      #live-game-panel.live-fullscreen .count-panel-large .count-lamp { width:20px; height:20px; }
+      #live-game-panel.live-fullscreen .count-panel-large .count-controls button { min-height:32px; }
+      #live-game-panel.live-fullscreen #play-log { max-height:90px; }
     }
   </style>
 </head>
@@ -191,6 +215,7 @@
               <div id="inning-scoreboard" class="inning-board"></div>
             </div>
 
+            <div class="live-lower">
             <div id="live-offense-player">
               <label class="text-[10px] text-gray-300">現在の打者（Okayama Girls）</label>
               <select id="live-batter" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select>
@@ -216,7 +241,7 @@
 
             <div>
               <div class="flex items-center justify-between mb-2">
-                <div id="result-title" class="text-xs font-black">打席結果</div>
+                <div id="result-title" class="text-xs font-black">打撃結果</div>
                 <div class="flex items-center gap-2 bg-white/10 rounded-xl px-2 py-1">
                   <span id="play-run-label" class="text-[10px] font-bold text-gray-300">打点</span>
                   <button id="play-run-down" type="button" class="w-7 h-7 rounded-lg bg-white/10 font-black">−</button>
@@ -230,6 +255,7 @@
             <div class="play-log-box bg-black/20 rounded-2xl p-3">
               <div class="flex justify-between items-center mb-2"><b class="text-xs">プレイログ</b><span class="text-[10px] text-gray-400">新しい順</span></div>
               <div id="play-log" class="space-y-2 max-h-48 overflow-auto text-xs"><div class="text-gray-400">まだ記録がありません。</div></div>
+            </div>
             </div>
 
             <div class="grid grid-cols-2 gap-2">
@@ -872,7 +898,7 @@
       const isOffense = currentHalfIsOffense();
       document.getElementById("live-offense-player").classList.toggle("hidden", !isOffense);
       document.getElementById("live-defense-player").classList.toggle("hidden", isOffense);
-      document.getElementById("result-title").textContent = isOffense ? "打席結果（自チーム）" : "相手打者の結果（投手記録）";
+      document.getElementById("result-title").textContent = isOffense ? "打撃結果（自チーム）" : "相手打者の結果（投手記録）";
       document.getElementById("live-team-score").textContent=liveState.teamScore || 0;
       document.getElementById("live-opp-score").textContent=liveState.opponentScore || 0;
       renderInningScoreboard();
