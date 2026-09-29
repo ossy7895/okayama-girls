@@ -59,19 +59,22 @@
     .inning-table th.team-name { font-size:8px; font-weight:700; letter-spacing:.12em; color:#9ca3af; }
     .inning-table td.team-name { font-size:11px; font-weight:900; letter-spacing:.02em; color:#fff; }
     .count-panel-large { background:rgba(0,0,0,.20); border-radius:1rem; padding:.6rem .75rem; }
-    .count-panel-large .count-board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; padding:0; }
-    .count-panel-large .count-row { display:flex; flex-direction:column; align-items:center; gap:.42rem; }
-    .count-panel-large .count-label { font-size:1.2rem; }
-    .count-panel-large .count-lamps { justify-content:center; gap:.42rem; min-height:27px; }
-    .count-panel-large .count-lamp { width:24px; height:24px; }
-    .count-panel-large .count-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; margin-top:.55rem; }
+    /* v7.3: B/S/O layout is fixed to the approved vertical reference. */
+    .count-panel-large .count-board { display:flex; flex-direction:column; gap:.5rem; padding:.15rem .25rem; }
+    .count-panel-large .count-row { display:grid; grid-template-columns:32px 1fr; align-items:center; column-gap:.75rem; }
+    .count-panel-large .count-label { font-size:1.25rem; line-height:1; font-weight:900; text-align:center; }
+    .count-panel-large .count-lamps { justify-content:flex-start; gap:.55rem; min-height:27px; }
+    .count-panel-large .count-lamp { width:25px; height:25px; }
+    .count-panel-large .count-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; margin-top:.65rem; }
     .count-panel-large .count-controls .flex { gap:.35rem; }
     .count-panel-large .count-controls button { min-height:42px; padding:.45rem 0; font-size:1rem; font-weight:900; }
     @media (max-width:360px) {
       .inning-table { min-width:320px; }
       .count-panel-large { padding:.5rem; }
-      .count-panel-large .count-board,.count-panel-large .count-controls { gap:.35rem; }
-      .count-panel-large .count-lamp { width:21px; height:21px; }
+      .count-panel-large .count-board { gap:.45rem; }
+      .count-panel-large .count-row { grid-template-columns:28px 1fr; column-gap:.6rem; }
+      .count-panel-large .count-lamp { width:23px; height:23px; }
+      .count-panel-large .count-controls { gap:.35rem; }
     }
   </style>
 </head>
@@ -821,8 +824,9 @@
     function renderInningScoreboard() {
       const maxInning=Math.max(7, liveState.inning||1, ...Object.keys(liveState.inningScores?.team||{}).map(Number), ...Object.keys(liveState.inningScores?.opponent||{}).map(Number));
       const heads=Array.from({length:maxInning},(_,i)=>i+1);
-      const row=(label,bucket,total)=>`<tr><td class="team-name">${label}</td>${heads.map(n=>`<td class="${n===liveState.inning?'current-inning':''}">${liveState.inningScores?.[bucket]?.[String(n)] ?? ''}</td>`).join('')}<td class="total">${total||0}</td></tr>`;
-      document.getElementById("inning-scoreboard").innerHTML=`<table class="inning-table"><thead><tr><th class="team-name">TEAM</th>${heads.map(n=>`<th class="${n===liveState.inning?'current-inning':''}">${n}</th>`).join('')}<th class="total">計</th></tr></thead><tbody>${row('Okayama','team',liveState.teamScore)}${row('相手','opponent',liveState.opponentScore)}</tbody></table>`;
+      const activeBucket=currentScoreBucket();
+      const row=(label,bucket,total)=>`<tr><td class="team-name">${label}</td>${heads.map(n=>`<td class="${n===liveState.inning && bucket===activeBucket?'current-inning':''}">${liveState.inningScores?.[bucket]?.[String(n)] ?? ''}</td>`).join('')}<td class="total">${total||0}</td></tr>`;
+      document.getElementById("inning-scoreboard").innerHTML=`<table class="inning-table"><thead><tr><th class="team-name">TEAM</th>${heads.map(n=>`<th>${n}</th>`).join('')}<th class="total">計</th></tr></thead><tbody>${row('OKAYAMA','team',liveState.teamScore)}${row('相手','opponent',liveState.opponentScore)}</tbody></table>`;
     }
 
     function hideInningUndo() {
