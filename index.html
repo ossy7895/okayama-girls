@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.17</title>
+  <title>Okayama Girls v7.18</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -176,17 +176,18 @@
     /* v7.17 header controls + notice log UI. Brand colors/design remain unchanged. */
     .og-header-logo-wrap {
       width:190px; max-width:52vw; height:50px; overflow:hidden; padding:4px 7px 0;
-      border-radius:10px; background:rgba(0,0,0,.28) !important;
+      border-radius:10px; background:rgba(0,0,0,.48) !important;
       backdrop-filter:none !important; box-shadow:none !important;
     }
     .og-header-logo { width:100%; height:auto; display:block; }
     .header-account-controls { bottom:6px; right:6px; top:auto !important; gap:5px; align-items:flex-end; }
-    .header-account-pill { background:rgba(0,0,0,.28) !important; border:1px solid rgba(255,255,255,.22); backdrop-filter:none; }
+    .header-account-pill { background:rgba(0,0,0,.48) !important; border:1px solid rgba(255,255,255,.22); backdrop-filter:none; }
     .header-brand-position { bottom:6px !important; left:6px !important; }
-    .notice-list-scroll { max-height:174px; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; scrollbar-width:thin; }
+    .notice-list-scroll { max-height:none; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; scrollbar-width:thin; }
     .notice-list-scroll::-webkit-scrollbar { width:3px; }
     .notice-list-scroll::-webkit-scrollbar-thumb { background:#D1D5DB; border-radius:999px; }
     .notice-log-row { padding:.62rem 0; border-bottom:1px solid #E7EAF0; }
+    .notice-list-scroll.notice-has-more { height:calc(var(--notice-row-height, 44px) * 3); }
     .notice-log-row:last-child { border-bottom:0; }
     @media (max-width:360px) {
       .og-header-logo-wrap { width:165px; max-width:50vw; height:44px; }
@@ -221,7 +222,7 @@
   <div id="app-screen" class="hidden pb-24">
     <header class="relative w-full bg-team-black text-white shadow-md overflow-hidden">
       <div class="relative h-48 w-full overflow-hidden">
-        <img id="header-bg-img" src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1000&q=80" alt="Okayama Girls" class="w-full h-full object-cover">
+        <img id="header-bg-img" alt="Okayama Girls" class="w-full h-full object-cover opacity-0 transition-opacity duration-150">
         
         <div class="header-account-controls absolute z-20 flex">
           <span id="role-badge" class="header-account-pill text-white text-[10px] px-2.5 py-1.5 rounded-full">member</span>
@@ -652,7 +653,17 @@
     function startRealtimeData() {
       if (!unsubscribeHeader) {
         unsubscribeHeader = onSnapshot(doc(db, "settings", "header"), (snap) => {
-          if (snap.exists() && snap.data().url) document.getElementById("header-bg-img").src = snap.data().url;
+          const img = document.getElementById("header-bg-img");
+          if (snap.exists() && snap.data().url) {
+            const realUrl = snap.data().url;
+            img.onload = () => img.classList.remove("opacity-0");
+            img.onerror = () => img.classList.add("opacity-0");
+            if (img.src !== realUrl) img.src = realUrl;
+            else if (img.complete && img.naturalWidth) img.classList.remove("opacity-0");
+          } else {
+            img.removeAttribute("src");
+            img.classList.add("opacity-0");
+          }
         }, (error) => console.warn("HEADER_READ_ERROR", error));
       }
 
@@ -669,6 +680,17 @@
             const safeDate = String(n.dateLabel || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
             return `<div class="notice-log-row"><p class="text-xs text-gray-700 whitespace-pre-wrap break-words"><span class="font-black text-team-red">${safeDate}</span>${safeDate ? '　' : ''}${safeText}</p></div>`;
           }).join("");
+          const rows = [...wrap.querySelectorAll(".notice-log-row")];
+          if (rows.length > 3) {
+            const visibleHeight = rows.slice(0, 3).reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
+            wrap.style.height = `${Math.ceil(visibleHeight)}px`;
+            wrap.style.maxHeight = `${Math.ceil(visibleHeight)}px`;
+            wrap.classList.add("notice-has-more");
+          } else {
+            wrap.style.height = "auto";
+            wrap.style.maxHeight = "none";
+            wrap.classList.remove("notice-has-more");
+          }
         }, (error) => {
           console.warn("NOTICE_READ_ERROR", error);
           document.getElementById("home-notice-text").innerHTML = '<p class="text-xs text-red-600">連絡事項を読み込めません。</p>';
