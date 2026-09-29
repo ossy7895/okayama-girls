@@ -13,6 +13,17 @@
     .bg-team-red{background-color:var(--primary-red)} .text-team-red{color:var(--primary-red)}
     .bg-team-black{background-color:var(--team-black)} .hero-gradient{background:linear-gradient(180deg,rgba(200,16,46,.75),rgba(26,26,26,.95))}
     .btn-active:active{transform:scale(.97)}
+    body.live-mode { overflow:hidden; overscroll-behavior:none; touch-action:manipulation; }
+    #live-game-panel.live-fullscreen { position:fixed; inset:0; z-index:100; width:100%; height:100dvh; max-height:100dvh; border-radius:0; overflow:hidden; display:flex; flex-direction:column; }
+    #live-game-panel.live-fullscreen .live-body { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:.55rem; padding:.7rem; }
+    #live-game-panel.live-fullscreen .play-log-box { flex:1; min-height:58px; overflow:hidden; }
+    #live-game-panel.live-fullscreen #play-log { max-height:100%; overflow:auto; }
+    .count-lamps { display:flex; justify-content:center; gap:.35rem; margin:.4rem 0; }
+    .count-lamp { width:18px; height:18px; border-radius:9999px; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); box-shadow:inset 0 0 0 1px rgba(0,0,0,.2); }
+    .count-lamp.on.ball { background:#22c55e; box-shadow:0 0 8px rgba(34,197,94,.7); }
+    .count-lamp.on.strike { background:#facc15; box-shadow:0 0 8px rgba(250,204,21,.7); }
+    .count-lamp.on.out { background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.7); }
+    #live-toast { position:fixed; left:50%; top:max(14px, env(safe-area-inset-top)); transform:translateX(-50%); z-index:130; min-width:220px; max-width:90vw; padding:.8rem 1rem; border-radius:9999px; font-size:.8rem; font-weight:900; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25); }
   </style>
 </head>
 <body class="text-gray-800 antialiased">
@@ -107,10 +118,10 @@
         <div id="live-game-panel" class="hidden rounded-3xl overflow-hidden shadow-xl bg-[#101827] text-white">
           <div class="p-4 bg-team-red flex items-center justify-between">
             <div><div class="text-[10px] opacity-80">LIVE SCORE</div><div id="live-game-title" class="font-black text-lg">試合</div></div>
-            <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">一覧へ</button>
+            <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">保存せず終了</button>
           </div>
 
-          <div class="p-4 space-y-4">
+          <div class="live-body p-4 space-y-4">
             <div class="grid grid-cols-3 gap-2 text-center">
               <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">イニング</div><div class="flex justify-center gap-2 mt-1"><button id="inning-down" class="px-2">−</button><b id="live-inning" class="text-xl">1</b><button id="inning-up" class="px-2">＋</button></div></div>
               <button id="half-toggle" class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">攻守</div><b id="live-half" class="text-xl">表</b></button>
@@ -123,9 +134,9 @@
             </div>
 
             <div class="grid grid-cols-3 gap-3 text-center">
-              <div><div class="text-xs font-black text-green-400">B</div><div id="ball-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg py-2">＋</button></div></div>
-              <div><div class="text-xs font-black text-yellow-300">S</div><div id="strike-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg py-2">＋</button></div></div>
-              <div><div class="text-xs font-black text-red-400">O</div><div id="out-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg py-2">＋</button></div></div>
+              <div><div class="text-xs font-black text-green-400">B <span id="ball-count">0</span></div><div id="ball-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg py-2">＋</button></div></div>
+              <div><div class="text-xs font-black text-yellow-300">S <span id="strike-count">0</span></div><div id="strike-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg py-2">＋</button></div></div>
+              <div><div class="text-xs font-black text-red-400">O <span id="out-count">0</span></div><div id="out-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg py-2">＋</button></div></div>
             </div>
 
             <div>
@@ -133,7 +144,7 @@
               <div id="result-buttons" class="grid grid-cols-3 gap-2"></div>
             </div>
 
-            <div class="bg-black/20 rounded-2xl p-3">
+            <div class="play-log-box bg-black/20 rounded-2xl p-3">
               <div class="flex justify-between items-center mb-2"><b class="text-xs">プレイログ</b><span class="text-[10px] text-gray-400">新しい順</span></div>
               <div id="play-log" class="space-y-2 max-h-48 overflow-auto text-xs"><div class="text-gray-400">まだ記録がありません。</div></div>
             </div>
@@ -163,6 +174,8 @@
     </nav>
   </div>
 
+
+  <div id="live-toast" class="hidden"></div>
 
   <div id="event-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-sm rounded-2xl p-4 space-y-3">
@@ -584,26 +597,62 @@
 
     function gameDocId(eventId) { return "event_" + eventId; }
 
+    let liveSavedSnapshot = null;
+
+    function cloneLiveState(value) { return JSON.parse(JSON.stringify(value)); }
+
+    function showLiveToast(message, ok=true) {
+      const toast=document.getElementById("live-toast");
+      toast.textContent=message;
+      toast.className = ok ? "bg-green-600 text-white" : "bg-red-600 text-white";
+      clearTimeout(showLiveToast.timer);
+      showLiveToast.timer=setTimeout(()=>toast.className="hidden",2200);
+    }
+
+    function setLiveFullscreen(enabled) {
+      document.body.classList.toggle("live-mode", enabled);
+      document.getElementById("live-game-panel").classList.toggle("live-fullscreen", enabled);
+    }
+
+    function leaveLiveMode() {
+      setLiveFullscreen(false);
+      document.getElementById("live-game-panel").classList.add("hidden");
+      document.getElementById("live-start-panel").classList.remove("hidden");
+    }
+
+    function renderLamps(id, count, max, kind) {
+      document.getElementById(id).innerHTML=Array.from({length:max},(_,i)=>`<span class="count-lamp ${kind} ${i<count?"on":""}"></span>`).join("");
+    }
+
     async function saveLiveGame(showSaved=true) {
-      if (!liveGameId) return;
+      if (!liveGameId) return false;
       liveState.pitcherId = document.getElementById("live-pitcher").value;
       liveState.batterId = document.getElementById("live-batter").value;
       const eventId = document.getElementById("live-event-select").value;
       try {
         await setDoc(doc(db,"games",liveGameId), {
-          eventId,
-          ...liveState,
-          updatedAt: Timestamp.now(),
-          updatedBy: auth.currentUser?.uid || ""
+          eventId, ...liveState, updatedAt: Timestamp.now(), updatedBy: auth.currentUser?.uid || ""
         }, {merge:true});
+        liveSavedSnapshot=cloneLiveState(liveState);
         const badge=document.getElementById("live-save-state");
-        badge.textContent = showSaved ? "保存済み" : "自動保存";
+        badge.textContent="保存済み";
         badge.className="text-[10px] font-bold text-green-600";
+        if(showSaved) showLiveToast("✓ 途中保存しました",true);
+        return true;
       } catch(e) {
         console.error("LIVE_SAVE_ERROR",e);
-        document.getElementById("live-save-state").textContent="保存エラー";
-        alert("LIVEデータを保存できませんでした。Firestore Rulesの games 設定を確認してください。");
+        const badge=document.getElementById("live-save-state");
+        badge.textContent="保存エラー";
+        badge.className="text-[10px] font-bold text-red-600";
+        showLiveToast("保存できませんでした",false);
+        return false;
       }
+    }
+
+    function markLiveChanged() {
+      const badge=document.getElementById("live-save-state");
+      badge.textContent="未保存の変更あり";
+      badge.className="text-[10px] font-bold text-yellow-600";
     }
 
     function updateLiveUI() {
@@ -613,6 +662,9 @@
       document.getElementById("ball-count").textContent=liveState.ball;
       document.getElementById("strike-count").textContent=liveState.strike;
       document.getElementById("out-count").textContent=liveState.out;
+      renderLamps("ball-lamps",liveState.ball,3,"ball");
+      renderLamps("strike-lamps",liveState.strike,2,"strike");
+      renderLamps("out-lamps",liveState.out,2,"out");
       document.getElementById("live-pitcher").value=liveState.pitcherId || "";
       document.getElementById("live-batter").value=liveState.batterId || "";
       const log=document.getElementById("play-log");
@@ -623,7 +675,7 @@
 
     const results=["単打","二塁打","三塁打","本塁打","四球","死球","三振","凡打","犠打","犠飛","失策","盗塁"];
     document.getElementById("result-buttons").innerHTML=results.map(r =>
-      `<button type="button" data-result="${r}" class="result-btn bg-white/10 hover:bg-team-red rounded-xl py-3 text-xs font-bold">${r}</button>`).join("");
+      `<button type="button" data-result="${r}" class="result-btn bg-white/10 hover:bg-team-red rounded-xl py-2 text-xs font-bold">${r}</button>`).join("");
 
     document.getElementById("live-start-button").addEventListener("click", async () => {
       const eventId=document.getElementById("live-event-select").value;
@@ -635,48 +687,67 @@
         if(snap.exists()) {
           const d=snap.data();
           liveState={inning:d.inning||1,half:d.half||"表",score:d.score||0,ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
+          liveSavedSnapshot=cloneLiveState(liveState);
+          document.getElementById("live-save-state").textContent="保存済み";
         } else {
           liveState={inning:1,half:"表",score:0,ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
-          await saveLiveGame(false);
+          liveSavedSnapshot=null;
+          document.getElementById("live-save-state").textContent="未保存";
         }
         document.getElementById("live-game-title").textContent=(e?.name||"試合")+(e?.opponent ? " vs "+e.opponent : "");
         document.getElementById("live-start-panel").classList.add("hidden");
         document.getElementById("live-game-panel").classList.remove("hidden");
+        setLiveFullscreen(true);
         updateLiveUI();
       } catch(err) {
         console.error("LIVE_OPEN_ERROR",err);
-        alert("試合データを開けませんでした。Firestore Rulesの games 設定が必要です。");
+        alert("試合データを開けませんでした。Firestore Rulesの games 設定を確認してください。");
       }
     });
 
-    document.getElementById("live-close-button").addEventListener("click", async()=>{ await saveLiveGame(); document.getElementById("live-game-panel").classList.add("hidden"); document.getElementById("live-start-panel").classList.remove("hidden"); });
-    document.getElementById("live-save-button").addEventListener("click",()=>saveLiveGame());
-    document.getElementById("inning-up").addEventListener("click",()=>{liveState.inning++;updateLiveUI();saveLiveGame(false);});
-    document.getElementById("inning-down").addEventListener("click",()=>{liveState.inning=Math.max(1,liveState.inning-1);updateLiveUI();saveLiveGame(false);});
-    document.getElementById("half-toggle").addEventListener("click",()=>{liveState.half=liveState.half==="表"?"裏":"表";updateLiveUI();saveLiveGame(false);});
-    document.getElementById("score-up").addEventListener("click",()=>{liveState.score++;updateLiveUI();saveLiveGame(false);});
-    document.getElementById("score-down").addEventListener("click",()=>{liveState.score=Math.max(0,liveState.score-1);updateLiveUI();saveLiveGame(false);});
+    document.getElementById("live-close-button").addEventListener("click",()=>{
+      if(!confirm("保存せず終了します。よろしいですか？\n途中保存以降の変更は破棄されます。")) return;
+      if(liveSavedSnapshot) liveState=cloneLiveState(liveSavedSnapshot);
+      leaveLiveMode();
+    });
+    document.getElementById("live-save-button").addEventListener("click",()=>saveLiveGame(true));
+    document.getElementById("inning-up").addEventListener("click",()=>{liveState.inning++;updateLiveUI();markLiveChanged();});
+    document.getElementById("inning-down").addEventListener("click",()=>{liveState.inning=Math.max(1,liveState.inning-1);updateLiveUI();markLiveChanged();});
+    document.getElementById("half-toggle").addEventListener("click",()=>{liveState.half=liveState.half==="表"?"裏":"表";updateLiveUI();markLiveChanged();});
+    document.getElementById("score-up").addEventListener("click",()=>{liveState.score++;updateLiveUI();markLiveChanged();});
+    document.getElementById("score-down").addEventListener("click",()=>{liveState.score=Math.max(0,liveState.score-1);updateLiveUI();markLiveChanged();});
     document.querySelectorAll(".count-btn").forEach(b=>b.addEventListener("click",()=>{
       const key=b.dataset.count, delta=Number(b.dataset.delta);
       const max=key==="ball"?3:key==="strike"?2:2;
-      liveState[key]=Math.max(0,Math.min(max,liveState[key]+delta)); updateLiveUI(); saveLiveGame(false);
+      liveState[key]=Math.max(0,Math.min(max,liveState[key]+delta)); updateLiveUI(); markLiveChanged();
     }));
-    ["live-pitcher","live-batter"].forEach(id=>document.getElementById(id).addEventListener("change",()=>saveLiveGame(false)));
+    ["live-pitcher","live-batter"].forEach(id=>document.getElementById(id).addEventListener("change",()=>{
+      liveState.pitcherId=document.getElementById("live-pitcher").value;
+      liveState.batterId=document.getElementById("live-batter").value;
+      markLiveChanged();
+    }));
 
-    document.querySelectorAll(".result-btn").forEach(b=>b.addEventListener("click",async()=>{
+    document.querySelectorAll(".result-btn").forEach(b=>b.addEventListener("click",()=>{
       const batterId=document.getElementById("live-batter").value;
       const batter=currentMembers.find(m=>m.id===batterId);
+      liveState.pitcherId=document.getElementById("live-pitcher").value||"";
+      liveState.batterId=batterId||"";
       liveState.logs=liveState.logs||[];
-      liveState.logs.push({inning:liveState.inning,half:liveState.half,result:b.dataset.result,batterId:batterId||"",batterName:batter?.name||"打者未選択",pitcherId:document.getElementById("live-pitcher").value||"",at:new Date().toISOString()});
+      liveState.logs.push({inning:liveState.inning,half:liveState.half,result:b.dataset.result,batterId:batterId||"",batterName:batter?.name||"打者未選択",pitcherId:liveState.pitcherId,at:new Date().toISOString()});
       liveState.ball=0; liveState.strike=0;
       if(["三振","凡打","犠打","犠飛"].includes(b.dataset.result)) liveState.out=Math.min(2,liveState.out+1);
-      updateLiveUI(); await saveLiveGame(false);
+      updateLiveUI(); markLiveChanged();
     }));
 
     document.getElementById("live-finish-button").addEventListener("click",async()=>{
-      if(!confirm("試合を終了しますか？\n終了後の成績自動集計は次のv7で実装します。")) return;
-      liveState.status="finished"; await saveLiveGame();
-      document.getElementById("live-save-state").textContent="試合終了・保存済み";
+      if(!confirm("試合を終了します。よろしいですか？\n現在の内容を保存して試合を終了します。")) return;
+      liveState.status="finished";
+      const ok=await saveLiveGame(false);
+      if(ok){
+        document.getElementById("live-save-state").textContent="試合終了・保存済み";
+        showLiveToast("✓ 試合を終了して保存しました",true);
+        setTimeout(leaveLiveMode,700);
+      }
     });
 
     function switchTab(tabId) {
