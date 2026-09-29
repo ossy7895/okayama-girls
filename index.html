@@ -134,9 +134,18 @@
               <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">得点</div><div class="flex justify-center gap-2 mt-1"><button id="score-down" class="px-2">−</button><b id="live-score" class="text-xl">0</b><button id="score-up" class="px-2">＋</button></div></div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div><label class="text-[10px] text-gray-300">現在の投手</label><select id="live-pitcher" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select></div>
-              <div><label class="text-[10px] text-gray-300">現在の打者</label><select id="live-batter" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select></div>
+            <div id="live-mode-banner" class="rounded-2xl bg-white/10 border border-white/10 px-4 py-2 flex items-center justify-between">
+              <div><div class="text-[10px] text-gray-300">現在</div><div id="live-mode-text" class="text-lg font-black">攻撃</div></div>
+              <div id="live-side-text" class="text-xs font-bold text-gray-300">先攻</div>
+            </div>
+
+            <div id="live-offense-player">
+              <label class="text-[10px] text-gray-300">現在の打者（Okayama Girls）</label>
+              <select id="live-batter" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select>
+            </div>
+            <div id="live-defense-player" class="hidden">
+              <label class="text-[10px] text-gray-300">現在の投手（Okayama Girls）</label>
+              <select id="live-pitcher" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select>
             </div>
 
             <div class="bg-black/20 rounded-2xl p-3">
@@ -154,7 +163,7 @@
             </div>
 
             <div>
-              <div class="text-xs font-black mb-2">打席結果</div>
+              <div id="result-title" class="text-xs font-black mb-2">打席結果</div>
               <div id="result-buttons" class="grid grid-cols-3 gap-2"></div>
             </div>
 
@@ -209,6 +218,14 @@
       <input type="datetime-local" id="event-date" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="event-place" placeholder="場所" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="event-opponent" placeholder="対戦相手（試合のみ・任意）" class="w-full text-base border rounded-lg p-2.5">
+      <div id="event-side-wrap" class="hidden">
+        <label class="text-xs font-bold text-gray-600 block mb-1">Okayama Girlsの攻撃順</label>
+        <select id="event-side" class="w-full text-base border rounded-lg p-2.5">
+          <option value="">先攻／後攻を選択</option>
+          <option value="先攻">先攻</option>
+          <option value="後攻">後攻</option>
+        </select>
+      </div>
       <div class="flex space-x-2 pt-2">
         <button id="cancel-event-button" type="button" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold">キャンセル</button>
         <button id="save-event-button" type="button" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold">保存</button>
@@ -261,6 +278,7 @@
     let unsubscribeEvents = null;
     let unsubscribeAttendance = null;
     let liveGameId = null;
+    let currentLiveSide = "";
     let liveState = {inning:1, half:"表", score:0, ball:0, strike:0, out:0, pitcherId:"", batterId:"", logs:[], status:"in_progress"};
 
     function showError(message) {
@@ -561,8 +579,17 @@
       document.getElementById("event-date").value = e ? toDateTimeLocal(e.date) : "";
       document.getElementById("event-place").value = e?.place || "";
       document.getElementById("event-opponent").value = e?.opponent || "";
+      document.getElementById("event-side").value = e?.side || "";
+      updateEventSideVisibility();
       eventModal.classList.remove("hidden"); eventModal.classList.add("flex");
     }
+
+    function updateEventSideVisibility() {
+      const isGame = document.getElementById("event-type").value === "試合";
+      document.getElementById("event-side-wrap").classList.toggle("hidden", !isGame);
+      if (!isGame) document.getElementById("event-side").value = "";
+    }
+    document.getElementById("event-type").addEventListener("change", updateEventSideVisibility);
 
     document.getElementById("save-event-button").addEventListener("click", async () => {
       if (!["admin","member"].includes(currentRole)) return;
@@ -572,10 +599,12 @@
       const dateText = document.getElementById("event-date").value;
       const place = document.getElementById("event-place").value.trim();
       const opponent = document.getElementById("event-opponent").value.trim();
+      const side = document.getElementById("event-side").value;
       if (!name || !dateText || !place) return alert("予定名・日時・場所を入力してください。");
+      if (type === "試合" && !side) return alert("試合は先攻／後攻を選択してください。");
       const date = new Date(dateText);
       if (Number.isNaN(date.getTime())) return alert("日時を確認してください。");
-      const data = {type, status, name, date:Timestamp.fromDate(date), place, opponent};
+      const data = {type, status, name, date:Timestamp.fromDate(date), place, opponent, side:type === "試合" ? side : ""};
       try {
         if (editingEventId) await updateDoc(doc(db, "events", editingEventId), data);
         else await addDoc(collection(db, "events"), data);
@@ -672,6 +701,13 @@
     function updateLiveUI() {
       document.getElementById("live-inning").textContent=liveState.inning;
       document.getElementById("live-half").textContent=liveState.half;
+      const isOffense = (currentLiveSide === "先攻" && liveState.half === "表") || (currentLiveSide === "後攻" && liveState.half === "裏");
+      document.getElementById("live-mode-text").textContent = isOffense ? "攻撃" : "守備";
+      document.getElementById("live-mode-text").className = isOffense ? "text-lg font-black text-yellow-300" : "text-lg font-black text-blue-300";
+      document.getElementById("live-side-text").textContent = `Okayama Girls：${currentLiveSide}`;
+      document.getElementById("live-offense-player").classList.toggle("hidden", !isOffense);
+      document.getElementById("live-defense-player").classList.toggle("hidden", isOffense);
+      document.getElementById("result-title").textContent = isOffense ? "打席結果（自チーム）" : "相手打者の結果（投手記録）";
       document.getElementById("live-score").textContent=liveState.score;
       document.getElementById("ball-count").textContent=liveState.ball;
       document.getElementById("strike-count").textContent=liveState.strike;
@@ -683,7 +719,7 @@
       document.getElementById("live-batter").value=liveState.batterId || "";
       const log=document.getElementById("play-log");
       log.innerHTML=liveState.logs?.length ? [...liveState.logs].reverse().map(x =>
-        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b>　${escapeHtml(x.batterName || "打者未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span></div>`).join("")
+        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b> <span class="text-gray-400">${escapeHtml(x.mode || "")}</span>　${escapeHtml(x.batterName || x.pitcherName || "選手未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span></div>`).join("")
         : '<div class="text-gray-400">まだ記録がありません。</div>';
     }
 
@@ -696,6 +732,8 @@
       if(!eventId) return alert("試合予定を選択してください。");
       liveGameId=gameDocId(eventId);
       const e=currentEvents.find(x=>x.id===eventId);
+      if (!e?.side) return alert("この試合には先攻／後攻が設定されていません。予定の編集から先攻／後攻を設定してください。");
+      currentLiveSide = e.side;
       try {
         const snap=await getDoc(doc(db,"games",liveGameId));
         if(snap.exists()) {
@@ -742,12 +780,17 @@
     }));
 
     document.querySelectorAll(".result-btn").forEach(b=>b.addEventListener("click",()=>{
+      const isOffense = (currentLiveSide === "先攻" && liveState.half === "表") || (currentLiveSide === "後攻" && liveState.half === "裏");
       const batterId=document.getElementById("live-batter").value;
+      const pitcherId=document.getElementById("live-pitcher").value;
       const batter=currentMembers.find(m=>m.id===batterId);
-      liveState.pitcherId=document.getElementById("live-pitcher").value||"";
+      const pitcher=currentMembers.find(m=>m.id===pitcherId);
+      if (isOffense && !batterId) return alert("現在の打者を選択してください。");
+      if (!isOffense && !pitcherId) return alert("現在の投手を選択してください。");
+      liveState.pitcherId=pitcherId||"";
       liveState.batterId=batterId||"";
       liveState.logs=liveState.logs||[];
-      liveState.logs.push({inning:liveState.inning,half:liveState.half,result:b.dataset.result,batterId:batterId||"",batterName:batter?.name||"打者未選択",pitcherId:liveState.pitcherId,at:new Date().toISOString()});
+      liveState.logs.push({inning:liveState.inning,half:liveState.half,mode:isOffense?"攻撃":"守備",result:b.dataset.result,batterId:isOffense?batterId:"",batterName:isOffense?(batter?.name||"打者未選択"):(pitcher?.name||"投手未選択"),pitcherId:!isOffense?pitcherId:"",pitcherName:!isOffense?(pitcher?.name||""):"",at:new Date().toISOString()});
       liveState.ball=0; liveState.strike=0;
       if(["三振","凡打","犠打","犠飛"].includes(b.dataset.result)) liveState.out=Math.min(2,liveState.out+1);
       updateLiveUI(); markLiveChanged();
