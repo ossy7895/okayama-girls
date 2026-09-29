@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.12</title>
+  <title>Okayama Girls v7.16</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -492,6 +492,7 @@
     <div class="bg-white w-full max-w-xs rounded-2xl p-4 space-y-3">
       <h3 id="member-modal-title" class="font-bold text-sm">新規メンバー追加</h3>
       <input type="text" id="new-mem-name" placeholder="選手のお名前" class="w-full text-base border rounded-lg p-2.5">
+      <input type="text" id="new-mem-kana" placeholder="フリガナ（例：オカヤマ ハナコ）" class="w-full text-base border rounded-lg p-2.5">
       <input type="number" id="new-mem-num" placeholder="背番号" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="new-mem-pos" placeholder="ポジション" class="w-full text-base border rounded-lg p-2.5">
       <div class="flex space-x-2 pt-2">
@@ -748,6 +749,7 @@
         <div class="bg-white p-3 rounded-xl border shadow-sm flex items-center space-x-3">
           <div class="w-10 h-10 rounded-full bg-team-black text-white font-black flex items-center justify-center">${escapeHtml(m.num || "0")}</div>
           <div class="min-w-0 flex-1">
+            <div class="text-[9px] text-gray-400 leading-tight mb-0.5">${escapeHtml(m.kana || "")}</div>
             <div class="text-xs font-bold">${escapeHtml(m.name || "")}</div>
             <div class="text-[10px] text-gray-400">${escapeHtml(m.pos || "選手")}</div>
             ${currentRole === "admin" ? `<div class="flex gap-2 mt-2">
@@ -765,6 +767,7 @@
             editingMemberId = member.id;
             document.getElementById("member-modal-title").textContent = "メンバー編集";
             document.getElementById("new-mem-name").value = member.name || "";
+            document.getElementById("new-mem-kana").value = member.kana || "";
             document.getElementById("new-mem-num").value = member.num || "";
             document.getElementById("new-mem-pos").value = member.pos || "";
             modal.classList.remove("hidden");
@@ -1588,6 +1591,7 @@
       editingMemberId = null;
       document.getElementById("member-modal-title").textContent = "新規メンバー追加";
       document.getElementById("new-mem-name").value = "";
+      document.getElementById("new-mem-kana").value = "";
       document.getElementById("new-mem-num").value = "";
       document.getElementById("new-mem-pos").value = "";
       modal.classList.remove("hidden"); modal.classList.add("flex");
@@ -1598,17 +1602,19 @@
     document.getElementById("save-member-button").addEventListener("click", async () => {
       if (currentRole !== "admin") return alert("管理者のみ追加できます。");
       const name = document.getElementById("new-mem-name").value.trim();
+      const kana = document.getElementById("new-mem-kana").value.trim();
       const num = document.getElementById("new-mem-num").value.trim();
       const pos = document.getElementById("new-mem-pos").value.trim() || "選手";
       if (!name || !num) return alert("名前と背番号を入力してください。");
       try {
         if (editingMemberId) {
-          await updateDoc(doc(db, "members", editingMemberId), { name, num, pos });
+          await updateDoc(doc(db, "members", editingMemberId), { name, kana, num, pos });
         } else {
-          await addDoc(collection(db, "members"), { name, num, pos, status:"未回答" });
+          await addDoc(collection(db, "members"), { name, kana, num, pos, status:"未回答" });
         }
         editingMemberId = null;
         document.getElementById("new-mem-name").value = "";
+        document.getElementById("new-mem-kana").value = "";
         document.getElementById("new-mem-num").value = "";
         document.getElementById("new-mem-pos").value = "";
         modal.classList.add("hidden"); modal.classList.remove("flex");
