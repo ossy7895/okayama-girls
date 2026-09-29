@@ -93,8 +93,57 @@
       </section>
 
       <section id="tab-stats" class="tab-content hidden space-y-4">
-        <h2 class="text-base font-bold">チーム・個人成績</h2>
-        <div class="bg-white rounded-2xl shadow-sm border p-4 text-xs text-gray-500">成績機能は次の段階でFirestore連携します。</div>
+        <div class="flex items-center justify-between">
+          <div><h2 class="text-base font-black">LIVE 試合入力</h2><p class="text-[10px] text-gray-400">試合中の記録をその場で保存</p></div>
+          <span id="live-save-state" class="text-[10px] font-bold text-gray-400">未開始</span>
+        </div>
+
+        <div id="live-start-panel" class="bg-white rounded-2xl border shadow-sm p-4 space-y-3">
+          <label class="text-xs font-bold">試合予定を選択</label>
+          <select id="live-event-select" class="w-full border rounded-xl p-3 text-sm"><option value="">試合を選択してください</option></select>
+          <button id="live-start-button" type="button" class="w-full bg-team-red text-white font-bold py-3 rounded-xl">LIVE入力を開始 / 再開</button>
+        </div>
+
+        <div id="live-game-panel" class="hidden rounded-3xl overflow-hidden shadow-xl bg-[#101827] text-white">
+          <div class="p-4 bg-team-red flex items-center justify-between">
+            <div><div class="text-[10px] opacity-80">LIVE SCORE</div><div id="live-game-title" class="font-black text-lg">試合</div></div>
+            <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">一覧へ</button>
+          </div>
+
+          <div class="p-4 space-y-4">
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">イニング</div><div class="flex justify-center gap-2 mt-1"><button id="inning-down" class="px-2">−</button><b id="live-inning" class="text-xl">1</b><button id="inning-up" class="px-2">＋</button></div></div>
+              <button id="half-toggle" class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">攻守</div><b id="live-half" class="text-xl">表</b></button>
+              <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">得点</div><div class="flex justify-center gap-2 mt-1"><button id="score-down" class="px-2">−</button><b id="live-score" class="text-xl">0</b><button id="score-up" class="px-2">＋</button></div></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-[10px] text-gray-300">現在の投手</label><select id="live-pitcher" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select></div>
+              <div><label class="text-[10px] text-gray-300">現在の打者</label><select id="live-batter" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div><div class="text-xs font-black text-green-400">B</div><div id="ball-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg py-2">＋</button></div></div>
+              <div><div class="text-xs font-black text-yellow-300">S</div><div id="strike-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg py-2">＋</button></div></div>
+              <div><div class="text-xs font-black text-red-400">O</div><div id="out-count" class="text-3xl font-black my-2">0</div><div class="flex gap-1"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg py-2">＋</button></div></div>
+            </div>
+
+            <div>
+              <div class="text-xs font-black mb-2">打席結果</div>
+              <div id="result-buttons" class="grid grid-cols-3 gap-2"></div>
+            </div>
+
+            <div class="bg-black/20 rounded-2xl p-3">
+              <div class="flex justify-between items-center mb-2"><b class="text-xs">プレイログ</b><span class="text-[10px] text-gray-400">新しい順</span></div>
+              <div id="play-log" class="space-y-2 max-h-48 overflow-auto text-xs"><div class="text-gray-400">まだ記録がありません。</div></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button id="live-save-button" class="bg-white text-gray-900 font-black py-3 rounded-xl">途中保存</button>
+              <button id="live-finish-button" class="bg-team-red text-white font-black py-3 rounded-xl">試合終了</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="tab-members" class="tab-content hidden space-y-3">
@@ -184,6 +233,8 @@
     let currentEvents = [];
     let unsubscribeEvents = null;
     let unsubscribeAttendance = null;
+    let liveGameId = null;
+    let liveState = {inning:1, half:"表", score:0, ball:0, strike:0, out:0, pitcherId:"", batterId:"", logs:[], status:"in_progress"};
 
     function showError(message) {
       loginError.textContent = message;
@@ -264,6 +315,7 @@
         unsubscribeEvents = onSnapshot(query(collection(db, "events"), orderBy("date", "asc")), (snapshot) => {
           currentEvents = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
           renderEvents();
+          renderLiveGameChoices();
           document.getElementById("home-attendance-count").textContent = currentEvents.length ? `予定 ${currentEvents.length}件` : "予定はまだありません";
         }, (error) => {
           console.error("EVENTS_READ_ERROR", error);
@@ -276,6 +328,7 @@
           const members = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
           currentMembers = members;
           renderMembers(members);
+          renderLiveMemberChoices();
           if (selectedEventId) watchAttendance(selectedEventId);
         }, (error) => {
           console.error("MEMBERS_READ_ERROR", error);
@@ -505,6 +558,125 @@
         console.error("EVENT_WRITE_ERROR", error);
         alert("予定を保存できませんでした。");
       }
+    });
+
+
+    function renderLiveGameChoices() {
+      const sel = document.getElementById("live-event-select");
+      if (!sel) return;
+      const keep = sel.value;
+      const games = currentEvents.filter(e => e.type === "試合");
+      sel.innerHTML = '<option value="">試合を選択してください</option>' +
+        games.map(e => `<option value="${e.id}">${escapeHtml(formatEventDate(e.date))}｜${escapeHtml(e.name || "試合")}${e.opponent ? " vs "+escapeHtml(e.opponent) : ""}</option>`).join("");
+      if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+    }
+
+    function renderLiveMemberChoices() {
+      ["live-pitcher","live-batter"].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const keep = sel.value;
+        sel.innerHTML = '<option value="">選手を選択</option>' + currentMembers.map(m =>
+          `<option value="${m.id}">#${escapeHtml(m.num || "")} ${escapeHtml(m.name || "")}</option>`).join("");
+        if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+      });
+    }
+
+    function gameDocId(eventId) { return "event_" + eventId; }
+
+    async function saveLiveGame(showSaved=true) {
+      if (!liveGameId) return;
+      liveState.pitcherId = document.getElementById("live-pitcher").value;
+      liveState.batterId = document.getElementById("live-batter").value;
+      const eventId = document.getElementById("live-event-select").value;
+      try {
+        await setDoc(doc(db,"games",liveGameId), {
+          eventId,
+          ...liveState,
+          updatedAt: Timestamp.now(),
+          updatedBy: auth.currentUser?.uid || ""
+        }, {merge:true});
+        const badge=document.getElementById("live-save-state");
+        badge.textContent = showSaved ? "保存済み" : "自動保存";
+        badge.className="text-[10px] font-bold text-green-600";
+      } catch(e) {
+        console.error("LIVE_SAVE_ERROR",e);
+        document.getElementById("live-save-state").textContent="保存エラー";
+        alert("LIVEデータを保存できませんでした。Firestore Rulesの games 設定を確認してください。");
+      }
+    }
+
+    function updateLiveUI() {
+      document.getElementById("live-inning").textContent=liveState.inning;
+      document.getElementById("live-half").textContent=liveState.half;
+      document.getElementById("live-score").textContent=liveState.score;
+      document.getElementById("ball-count").textContent=liveState.ball;
+      document.getElementById("strike-count").textContent=liveState.strike;
+      document.getElementById("out-count").textContent=liveState.out;
+      document.getElementById("live-pitcher").value=liveState.pitcherId || "";
+      document.getElementById("live-batter").value=liveState.batterId || "";
+      const log=document.getElementById("play-log");
+      log.innerHTML=liveState.logs?.length ? [...liveState.logs].reverse().map(x =>
+        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b>　${escapeHtml(x.batterName || "打者未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span></div>`).join("")
+        : '<div class="text-gray-400">まだ記録がありません。</div>';
+    }
+
+    const results=["単打","二塁打","三塁打","本塁打","四球","死球","三振","凡打","犠打","犠飛","失策","盗塁"];
+    document.getElementById("result-buttons").innerHTML=results.map(r =>
+      `<button type="button" data-result="${r}" class="result-btn bg-white/10 hover:bg-team-red rounded-xl py-3 text-xs font-bold">${r}</button>`).join("");
+
+    document.getElementById("live-start-button").addEventListener("click", async () => {
+      const eventId=document.getElementById("live-event-select").value;
+      if(!eventId) return alert("試合予定を選択してください。");
+      liveGameId=gameDocId(eventId);
+      const e=currentEvents.find(x=>x.id===eventId);
+      try {
+        const snap=await getDoc(doc(db,"games",liveGameId));
+        if(snap.exists()) {
+          const d=snap.data();
+          liveState={inning:d.inning||1,half:d.half||"表",score:d.score||0,ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
+        } else {
+          liveState={inning:1,half:"表",score:0,ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
+          await saveLiveGame(false);
+        }
+        document.getElementById("live-game-title").textContent=(e?.name||"試合")+(e?.opponent ? " vs "+e.opponent : "");
+        document.getElementById("live-start-panel").classList.add("hidden");
+        document.getElementById("live-game-panel").classList.remove("hidden");
+        updateLiveUI();
+      } catch(err) {
+        console.error("LIVE_OPEN_ERROR",err);
+        alert("試合データを開けませんでした。Firestore Rulesの games 設定が必要です。");
+      }
+    });
+
+    document.getElementById("live-close-button").addEventListener("click", async()=>{ await saveLiveGame(); document.getElementById("live-game-panel").classList.add("hidden"); document.getElementById("live-start-panel").classList.remove("hidden"); });
+    document.getElementById("live-save-button").addEventListener("click",()=>saveLiveGame());
+    document.getElementById("inning-up").addEventListener("click",()=>{liveState.inning++;updateLiveUI();saveLiveGame(false);});
+    document.getElementById("inning-down").addEventListener("click",()=>{liveState.inning=Math.max(1,liveState.inning-1);updateLiveUI();saveLiveGame(false);});
+    document.getElementById("half-toggle").addEventListener("click",()=>{liveState.half=liveState.half==="表"?"裏":"表";updateLiveUI();saveLiveGame(false);});
+    document.getElementById("score-up").addEventListener("click",()=>{liveState.score++;updateLiveUI();saveLiveGame(false);});
+    document.getElementById("score-down").addEventListener("click",()=>{liveState.score=Math.max(0,liveState.score-1);updateLiveUI();saveLiveGame(false);});
+    document.querySelectorAll(".count-btn").forEach(b=>b.addEventListener("click",()=>{
+      const key=b.dataset.count, delta=Number(b.dataset.delta);
+      const max=key==="ball"?3:key==="strike"?2:2;
+      liveState[key]=Math.max(0,Math.min(max,liveState[key]+delta)); updateLiveUI(); saveLiveGame(false);
+    }));
+    ["live-pitcher","live-batter"].forEach(id=>document.getElementById(id).addEventListener("change",()=>saveLiveGame(false)));
+
+    document.querySelectorAll(".result-btn").forEach(b=>b.addEventListener("click",async()=>{
+      const batterId=document.getElementById("live-batter").value;
+      const batter=currentMembers.find(m=>m.id===batterId);
+      liveState.logs=liveState.logs||[];
+      liveState.logs.push({inning:liveState.inning,half:liveState.half,result:b.dataset.result,batterId:batterId||"",batterName:batter?.name||"打者未選択",pitcherId:document.getElementById("live-pitcher").value||"",at:new Date().toISOString()});
+      liveState.ball=0; liveState.strike=0;
+      if(["三振","凡打","犠打","犠飛"].includes(b.dataset.result)) liveState.out=Math.min(2,liveState.out+1);
+      updateLiveUI(); await saveLiveGame(false);
+    }));
+
+    document.getElementById("live-finish-button").addEventListener("click",async()=>{
+      if(!confirm("試合を終了しますか？\n終了後の成績自動集計は次のv7で実装します。")) return;
+      liveState.status="finished"; await saveLiveGame();
+      document.getElementById("live-save-state").textContent="試合終了・保存済み";
     });
 
     function switchTab(tabId) {
