@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Okayama Girls</title>
+  <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -136,7 +137,7 @@
 
             <div id="live-mode-banner" class="rounded-2xl bg-white/10 border border-white/10 px-4 py-2 flex items-center justify-between">
               <div><div class="text-[10px] text-gray-300">現在</div><div id="live-mode-text" class="text-lg font-black">攻撃</div></div>
-              <div id="live-side-text" class="text-xs font-bold text-gray-300">先攻</div>
+              <div class="flex items-center gap-2"><div id="live-side-text" class="text-xs font-bold text-gray-300">先攻</div><button id="live-side-change" type="button" class="text-[10px] font-bold bg-white/10 border border-white/20 px-2 py-1 rounded-lg">変更</button></div>
             </div>
 
             <div id="live-offense-player">
@@ -200,6 +201,21 @@
 
   <div id="live-toast" class="hidden"></div>
 
+  <div id="live-side-modal" class="fixed inset-0 bg-black/80 z-[150] hidden items-center justify-center p-5">
+    <div class="bg-white text-gray-900 w-full max-w-xs rounded-3xl p-5 shadow-2xl">
+      <div class="text-center">
+        <div class="text-[11px] font-bold text-team-red tracking-wider">LIVE GAME SETUP</div>
+        <h3 class="text-lg font-black mt-1">Okayama Girls はどちらですか？</h3>
+        <p class="text-xs text-gray-500 mt-2">初回のみ設定します。再開時は自動で引き継がれます。</p>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mt-5">
+        <button type="button" data-live-side-choice="先攻" class="live-side-choice bg-team-red text-white font-black py-4 rounded-2xl">先攻</button>
+        <button type="button" data-live-side-choice="後攻" class="live-side-choice bg-team-black text-white font-black py-4 rounded-2xl">後攻</button>
+      </div>
+      <button id="live-side-cancel" type="button" class="w-full mt-3 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl">キャンセル</button>
+    </div>
+  </div>
+
   <div id="event-modal" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center p-4">
     <div class="bg-white w-full max-w-sm rounded-2xl p-4 space-y-3">
       <h3 id="event-modal-title" class="font-bold text-sm">予定を追加</h3>
@@ -218,14 +234,6 @@
       <input type="datetime-local" id="event-date" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="event-place" placeholder="場所" class="w-full text-base border rounded-lg p-2.5">
       <input type="text" id="event-opponent" placeholder="対戦相手（試合のみ・任意）" class="w-full text-base border rounded-lg p-2.5">
-      <div id="event-side-wrap" class="hidden">
-        <label class="text-xs font-bold text-gray-600 block mb-1">Okayama Girlsの攻撃順</label>
-        <select id="event-side" class="w-full text-base border rounded-lg p-2.5">
-          <option value="">先攻／後攻を選択</option>
-          <option value="先攻">先攻</option>
-          <option value="後攻">後攻</option>
-        </select>
-      </div>
       <div class="flex space-x-2 pt-2">
         <button id="cancel-event-button" type="button" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold">キャンセル</button>
         <button id="save-event-button" type="button" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold">保存</button>
@@ -579,17 +587,9 @@
       document.getElementById("event-date").value = e ? toDateTimeLocal(e.date) : "";
       document.getElementById("event-place").value = e?.place || "";
       document.getElementById("event-opponent").value = e?.opponent || "";
-      document.getElementById("event-side").value = e?.side || "";
-      updateEventSideVisibility();
       eventModal.classList.remove("hidden"); eventModal.classList.add("flex");
     }
 
-    function updateEventSideVisibility() {
-      const isGame = document.getElementById("event-type").value === "試合";
-      document.getElementById("event-side-wrap").classList.toggle("hidden", !isGame);
-      if (!isGame) document.getElementById("event-side").value = "";
-    }
-    document.getElementById("event-type").addEventListener("change", updateEventSideVisibility);
 
     document.getElementById("save-event-button").addEventListener("click", async () => {
       if (!["admin","member"].includes(currentRole)) return;
@@ -599,12 +599,10 @@
       const dateText = document.getElementById("event-date").value;
       const place = document.getElementById("event-place").value.trim();
       const opponent = document.getElementById("event-opponent").value.trim();
-      const side = document.getElementById("event-side").value;
       if (!name || !dateText || !place) return alert("予定名・日時・場所を入力してください。");
-      if (type === "試合" && !side) return alert("試合は先攻／後攻を選択してください。");
       const date = new Date(dateText);
       if (Number.isNaN(date.getTime())) return alert("日時を確認してください。");
-      const data = {type, status, name, date:Timestamp.fromDate(date), place, opponent, side:type === "試合" ? side : ""};
+      const data = {type, status, name, date:Timestamp.fromDate(date), place, opponent};
       try {
         if (editingEventId) await updateDoc(doc(db, "events", editingEventId), data);
         else await addDoc(collection(db, "events"), data);
@@ -674,7 +672,7 @@
       const eventId = document.getElementById("live-event-select").value;
       try {
         await setDoc(doc(db,"games",liveGameId), {
-          eventId, ...liveState, updatedAt: Timestamp.now(), updatedBy: auth.currentUser?.uid || ""
+          eventId, side:currentLiveSide, ...liveState, updatedAt: Timestamp.now(), updatedBy: auth.currentUser?.uid || ""
         }, {merge:true});
         liveSavedSnapshot=cloneLiveState(liveState);
         const badge=document.getElementById("live-save-state");
@@ -697,6 +695,38 @@
       badge.textContent="未保存の変更あり";
       badge.className="text-[10px] font-bold text-yellow-600";
     }
+
+    let liveSideResolver = null;
+
+    function chooseLiveSide({allowCancel=true}={}) {
+      const modal = document.getElementById("live-side-modal");
+      const cancel = document.getElementById("live-side-cancel");
+      cancel.classList.toggle("hidden", !allowCancel);
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      return new Promise(resolve => { liveSideResolver = resolve; });
+    }
+
+    function closeLiveSideModal(value) {
+      const modal = document.getElementById("live-side-modal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+      const resolve = liveSideResolver;
+      liveSideResolver = null;
+      if (resolve) resolve(value);
+    }
+
+    document.querySelectorAll(".live-side-choice").forEach(button => button.addEventListener("click", () => closeLiveSideModal(button.dataset.liveSideChoice)));
+    document.getElementById("live-side-cancel").addEventListener("click", () => closeLiveSideModal(""));
+
+    document.getElementById("live-side-change").addEventListener("click", async () => {
+      if (!confirm("先攻／後攻を変更すると攻守判定が変更されます。よろしいですか？")) return;
+      const side = await chooseLiveSide({allowCancel:true});
+      if (!side || side === currentLiveSide) return;
+      currentLiveSide = side;
+      updateLiveUI();
+      markLiveChanged();
+    });
 
     function updateLiveUI() {
       document.getElementById("live-inning").textContent=liveState.inning;
@@ -732,16 +762,21 @@
       if(!eventId) return alert("試合予定を選択してください。");
       liveGameId=gameDocId(eventId);
       const e=currentEvents.find(x=>x.id===eventId);
-      if (!e?.side) return alert("この試合には先攻／後攻が設定されていません。予定の編集から先攻／後攻を設定してください。");
-      currentLiveSide = e.side;
       try {
         const snap=await getDoc(doc(db,"games",liveGameId));
         if(snap.exists()) {
           const d=snap.data();
+          currentLiveSide = d.side || "";
+          if (!currentLiveSide) {
+            currentLiveSide = await chooseLiveSide({allowCancel:true});
+            if (!currentLiveSide) return;
+          }
           liveState={inning:d.inning||1,half:d.half||"表",score:d.score||0,ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
           liveSavedSnapshot=cloneLiveState(liveState);
           document.getElementById("live-save-state").textContent="保存済み";
         } else {
+          currentLiveSide = await chooseLiveSide({allowCancel:true});
+          if (!currentLiveSide) return;
           liveState={inning:1,half:"表",score:0,ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
           liveSavedSnapshot=null;
           document.getElementById("live-save-state").textContent="未保存";
