@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7</title>
+  <title>Okayama Girls v7.2</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -48,6 +48,31 @@
     .count-lamp.on.strike { background:#facc15; box-shadow:0 0 8px rgba(250,204,21,.65); }
     .count-lamp.on.out { background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.65); }
     #live-toast { position:fixed; left:50%; top:max(14px, env(safe-area-inset-top)); transform:translateX(-50%); z-index:130; min-width:220px; max-width:90vw; padding:.8rem 1rem; border-radius:9999px; font-size:.8rem; font-weight:900; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+
+    /* v7.2: mobile-first scoreboard / large B-S-O controls */
+    .scoreboard-full { background:rgba(0,0,0,.20); border-radius:1rem; padding:.55rem; min-width:0; }
+    .scoreboard-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.3rem; padding:0 .15rem; }
+    .scoreboard-title { font-size:.68rem; font-weight:900; letter-spacing:.04em; }
+    .inning-table { min-width:340px; font-size:10px; }
+    .inning-table th,.inning-table td { min-width:25px; padding:5px 3px; }
+    .inning-table th.team-name,.inning-table td.team-name { min-width:82px; max-width:82px; padding-left:7px; }
+    .inning-table th.team-name { font-size:8px; font-weight:700; letter-spacing:.12em; color:#9ca3af; }
+    .inning-table td.team-name { font-size:11px; font-weight:900; letter-spacing:.02em; color:#fff; }
+    .count-panel-large { background:rgba(0,0,0,.20); border-radius:1rem; padding:.6rem .75rem; }
+    .count-panel-large .count-board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; padding:0; }
+    .count-panel-large .count-row { display:flex; flex-direction:column; align-items:center; gap:.42rem; }
+    .count-panel-large .count-label { font-size:1.2rem; }
+    .count-panel-large .count-lamps { justify-content:center; gap:.42rem; min-height:27px; }
+    .count-panel-large .count-lamp { width:24px; height:24px; }
+    .count-panel-large .count-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; margin-top:.55rem; }
+    .count-panel-large .count-controls .flex { gap:.35rem; }
+    .count-panel-large .count-controls button { min-height:42px; padding:.45rem 0; font-size:1rem; font-weight:900; }
+    @media (max-width:360px) {
+      .inning-table { min-width:320px; }
+      .count-panel-large { padding:.5rem; }
+      .count-panel-large .count-board,.count-panel-large .count-controls { gap:.35rem; }
+      .count-panel-large .count-lamp { width:21px; height:21px; }
+    }
   </style>
 </head>
 <body class="text-gray-800 antialiased">
@@ -155,9 +180,12 @@
               <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">相手</div><div class="flex justify-center items-center gap-3 mt-1"><button id="opp-score-down" class="px-2">−</button><b id="live-opp-score" class="text-xl">0</b><button id="opp-score-up" class="px-2">＋</button></div></div>
             </div>
 
-            <div id="live-mode-banner" class="rounded-2xl bg-white/10 border border-white/10 px-4 py-2 flex items-center justify-between">
-              <div><div class="text-[10px] text-gray-300">現在</div><div id="live-mode-text" class="text-lg font-black">攻撃</div></div>
-              <div class="flex items-center gap-2"><div id="live-side-text" class="text-xs font-bold text-gray-300">先攻</div><button id="live-side-change" type="button" class="text-[10px] font-bold bg-white/10 border border-white/20 px-2 py-1 rounded-lg">変更</button></div>
+            <div class="scoreboard-full">
+              <div class="scoreboard-head">
+                <div class="scoreboard-title">イニング別得点</div>
+                <div class="flex items-center gap-2"><span class="text-[9px] text-gray-400">横にスライド可</span><button id="live-side-change" type="button" class="text-[9px] font-bold bg-white/10 border border-white/20 px-2 py-1 rounded-lg">先攻/後攻変更</button></div>
+              </div>
+              <div id="inning-scoreboard" class="inning-board"></div>
             </div>
 
             <div id="live-offense-player">
@@ -169,24 +197,18 @@
               <select id="live-pitcher" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select>
             </div>
 
-            <div class="score-count-wrap">
-              <div class="bg-black/20 rounded-2xl p-2 min-w-0">
-                <div class="flex items-center justify-between mb-1 px-1"><b class="text-[10px]">イニング別得点</b><span class="text-[9px] text-gray-400">横にスライド可</span></div>
-                <div id="inning-scoreboard" class="inning-board"></div>
+            <div class="count-panel-large">
+              <div class="count-board">
+                <div class="count-row"><div class="count-label text-green-400">B</div><div id="ball-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-yellow-300">S</div><div id="strike-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-red-400">O</div><div id="out-lamps" class="count-lamps"></div></div>
               </div>
-              <div class="compact-count bg-black/20 rounded-2xl p-2">
-                <div class="count-board">
-                  <div class="count-row"><div class="count-label text-green-400">B</div><div id="ball-lamps" class="count-lamps"></div></div>
-                  <div class="count-row"><div class="count-label text-yellow-300">S</div><div id="strike-lamps" class="count-lamps"></div></div>
-                  <div class="count-row"><div class="count-label text-red-400">O</div><div id="out-lamps" class="count-lamps"></div></div>
-                </div>
-                <div class="count-controls">
-                  <div class="flex"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg">＋</button></div>
-                  <div class="flex"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg">＋</button></div>
-                  <div class="flex"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg">＋</button></div>
-                </div>
-                <span id="ball-count" class="hidden">0</span><span id="strike-count" class="hidden">0</span><span id="out-count" class="hidden">0</span>
+              <div class="count-controls">
+                <div class="flex"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg">＋</button></div>
+                <div class="flex"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg">＋</button></div>
+                <div class="flex"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg">＋</button></div>
               </div>
+              <span id="ball-count" class="hidden">0</span><span id="strike-count" class="hidden">0</span><span id="out-count" class="hidden">0</span>
             </div>
 
             <div>
@@ -818,6 +840,12 @@
     }
 
     function advanceHalfAfterThreeOuts(snapshot) {
+      // 0点でチェンジした回も「未実施」と区別して0を確定保存する
+      liveState.inningScores=normalizeInningScores(liveState.inningScores);
+      const finishedBucket=currentScoreBucket();
+      const finishedInning=String(liveState.inning);
+      if (liveState.inningScores[finishedBucket][finishedInning] == null) liveState.inningScores[finishedBucket][finishedInning]=0;
+      recalcTotalsFromInnings();
       liveState.ball=0; liveState.strike=0; liveState.out=0;
       if(liveState.half==="表") liveState.half="裏";
       else { liveState.half="表"; liveState.inning+=1; }
@@ -838,9 +866,6 @@
       document.getElementById("live-inning").textContent=liveState.inning;
       document.getElementById("live-half").textContent=liveState.half;
       const isOffense = currentHalfIsOffense();
-      document.getElementById("live-mode-text").textContent = isOffense ? "攻撃" : "守備";
-      document.getElementById("live-mode-text").className = isOffense ? "text-lg font-black text-yellow-300" : "text-lg font-black text-blue-300";
-      document.getElementById("live-side-text").textContent = `Okayama Girls：${currentLiveSide}`;
       document.getElementById("live-offense-player").classList.toggle("hidden", !isOffense);
       document.getElementById("live-defense-player").classList.toggle("hidden", isOffense);
       document.getElementById("result-title").textContent = isOffense ? "打席結果（自チーム）" : "相手打者の結果（投手記録）";
