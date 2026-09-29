@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.8</title>
+  <title>Okayama Girls v7.9</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -133,6 +133,30 @@
       #live-game-panel.live-fullscreen .live-lower { flex:0 0 auto; overflow:visible; }
       #live-game-panel.live-fullscreen .play-log-box { min-height:96px; }
     }
+
+
+    /* v7.9 Standard Red: white + team red + dark navy. LIVE operation layout remains unchanged. */
+    :root { --primary-red:#C8102E; --team-black:#101827; --team-navy:#101827; --soft-red:#FFF1F3; --line:#E7EAF0; }
+    body { background:#F6F7F9; color:#101827; }
+    #app-screen > header { background:#101827; }
+    #app-screen main .bg-white { border-color:#E7EAF0; }
+    #app-screen main h2, #app-screen main .font-black { letter-spacing:.01em; }
+    .nav-btn.text-team-red { color:#C8102E; }
+    #bottom-nav { border-top:1px solid #E7EAF0; }
+    /* Header photo stays natural color: no color overlay/filter. */
+    #header-bg-img { filter:none !important; opacity:1 !important; }
+
+    /* v7.9 batting detail modal */
+    #stat-detail-modal { position:fixed; inset:0; z-index:220; display:flex; align-items:center; justify-content:center; padding:18px; background:rgba(16,24,39,.58); }
+    #stat-detail-modal.hidden { display:none; }
+    .stat-detail-card { width:min(100%,390px); background:#fff; color:#101827; border-radius:22px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.28); }
+    .stat-detail-row { display:grid; grid-template-columns:62px 1fr 28px; align-items:center; gap:9px; margin-top:12px; font-size:12px; font-weight:800; }
+    .stat-detail-track { height:11px; background:#EEF0F4; border-radius:999px; overflow:hidden; }
+    .stat-detail-bar { height:100%; min-width:0; border-radius:999px; background:#C8102E; transition:width .2s ease; }
+    .stat-summary-btn { width:100%; min-height:48px; border-radius:12px; background:#fff; transition:background .12s ease, transform .08s ease; }
+    .stat-summary-btn:active { background:#FFF1F3; transform:scale(.97); }
+    .stat-summary-btn .stat-hint { color:#C8102E; font-size:9px; font-weight:800; }
+
   </style>
 </head>
 <body class="text-gray-800 antialiased">
@@ -405,6 +429,23 @@
 
   <div id="inning-undo-bar" class="hidden bg-gray-950 text-white border border-white/20 rounded-2xl shadow-2xl px-3 py-2">
     <div class="flex items-center justify-between gap-3"><span class="text-xs font-bold">3アウトで攻守を切り替えました</span><button id="inning-undo-button" type="button" class="shrink-0 bg-white text-gray-900 font-black text-xs px-3 py-2 rounded-xl">↩ 元に戻す</button></div>
+  </div>
+
+
+  <!-- v7.9 batting-stat detail -->
+  <div id="stat-detail-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stat-detail-title">
+    <div class="stat-detail-card">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div id="stat-detail-player" class="text-[10px] font-bold text-gray-400"></div>
+          <h3 id="stat-detail-title" class="text-lg font-black mt-0.5">詳細</h3>
+          <div id="stat-detail-total" class="text-xs text-gray-500 mt-1"></div>
+        </div>
+        <button id="stat-detail-close-x" type="button" class="w-9 h-9 rounded-full bg-gray-100 text-gray-600 font-black" aria-label="閉じる">×</button>
+      </div>
+      <div id="stat-detail-chart" class="mt-4"></div>
+      <button id="stat-detail-close" type="button" class="w-full mt-5 bg-team-red text-white font-black py-3 rounded-xl">閉じる</button>
+    </div>
   </div>
 
   <script type="module">
@@ -1260,12 +1301,36 @@
       const box=document.getElementById("player-stats-list"); if(!box)return;
       if(!seasonPlayerStats.length){ box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">集計済みの試合成績はまだありません。試合終了後にここへ反映されます。</div>'; return; }
       if(statsDisplayMode==="batting") {
-        box.innerHTML=seasonPlayerStats.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">${t.games}試合</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">打率</div><div class="text-xl font-black text-team-red">${formatAvg(t.h,t.ab)}</div></div></div><div class="overflow-x-auto"><table class="min-w-[620px] w-full text-center text-[10px]"><thead class="bg-gray-50 text-gray-400"><tr><th class="p-2">打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>四球</th><th>死球</th><th>三振</th><th>犠打</th><th>犠飛</th><th>盗塁</th></tr></thead><tbody><tr class="font-bold"><td class="p-2">${t.pa}</td><td>${t.ab}</td><td>${t.h}</td><td>${t.doubles}</td><td>${t.triples}</td><td>${t.hr}</td><td>${t.rbi}</td><td>${t.bb}</td><td>${t.hbp}</td><td>${t.k}</td><td>${t.sh}</td><td>${t.sf}</td><td>${t.sb}</td></tr></tbody></table></div></div>`).join("");
+        box.innerHTML=seasonPlayerStats.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">${t.games}試合</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">打率</div><div class="text-xl font-black text-team-red">${formatAvg(t.h,t.ab)}</div></div></div><div class="grid grid-cols-4 sm:grid-cols-8 divide-x divide-y sm:divide-y-0 text-center text-[10px]"><div class="p-2"><div class="text-gray-400">打席</div><b>${t.pa}</b></div><div class="p-2"><div class="text-gray-400">打数</div><b>${t.ab}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="hits" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">安打</div><b>${t.h}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">打点</div><b>${t.rbi}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="walks" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">四死球</div><b>${t.bb+t.hbp}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">三振</div><b>${t.k}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="sac" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">犠打</div><b>${t.sh+t.sf}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">盗塁</div><b>${t.sb}</b></div></div></div>`).join("");
       } else {
         const pitchers=seasonPlayerStats.filter(t=>t.pOuts||t.pH||t.pHR||t.pBB||t.pHBP||t.pK||t.pRuns);
         box.innerHTML=pitchers.length?pitchers.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">投手成績</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">投球回</div><div class="text-xl font-black text-team-red">${formatIP(t.pOuts)}</div></div></div><div class="grid grid-cols-6 text-center text-[10px]"><div class="p-2"><div class="text-gray-400">被安打</div><b>${t.pH}</b></div><div class="p-2"><div class="text-gray-400">被本塁打</div><b>${t.pHR}</b></div><div class="p-2"><div class="text-gray-400">四球</div><b>${t.pBB}</b></div><div class="p-2"><div class="text-gray-400">死球</div><b>${t.pHBP}</b></div><div class="p-2"><div class="text-gray-400">奪三振</div><b>${t.pK}</b></div><div class="p-2"><div class="text-gray-400">失点</div><b>${t.pRuns}</b></div></div></div>`).join(""):'<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">投手成績はまだありません。</div>';
       }
     }
+
+
+    function openStatDetail(memberId, kind){
+      const t=seasonPlayerStats.find(x=>x.memberId===memberId); if(!t)return;
+      const modal=document.getElementById("stat-detail-modal"), title=document.getElementById("stat-detail-title"), total=document.getElementById("stat-detail-total"), chart=document.getElementById("stat-detail-chart"), player=document.getElementById("stat-detail-player");
+      let rows=[], totalValue=0, label="詳細";
+      if(kind==="hits"){
+        const singles=Math.max(0,n(t.h)-n(t.doubles)-n(t.triples)-n(t.hr));
+        label="安打詳細"; totalValue=n(t.h); rows=[["一塁打",singles],["二塁打",n(t.doubles)],["三塁打",n(t.triples)],["本塁打",n(t.hr)]];
+      } else if(kind==="walks"){
+        label="四死球詳細"; totalValue=n(t.bb)+n(t.hbp); rows=[["四球",n(t.bb)],["死球",n(t.hbp)]];
+      } else {
+        label="犠打詳細"; totalValue=n(t.sh)+n(t.sf); rows=[["犠打",n(t.sh)],["犠飛",n(t.sf)]];
+      }
+      const max=Math.max(1,...rows.map(r=>r[1]));
+      player.textContent=`#${t.num||"-"} ${t.name}`; title.textContent=label; total.textContent=`合計 ${totalValue}`;
+      chart.innerHTML=rows.map(([name,value])=>`<div class="stat-detail-row"><span>${escapeHtml(name)}</span><div class="stat-detail-track"><div class="stat-detail-bar" style="width:${Math.round((value/max)*100)}%"></div></div><b>${value}</b></div>`).join("");
+      modal.classList.remove("hidden");
+    }
+    function closeStatDetail(){ document.getElementById("stat-detail-modal")?.classList.add("hidden"); }
+    document.getElementById("player-stats-list")?.addEventListener("click",e=>{ const btn=e.target.closest("[data-stat-detail]"); if(btn) openStatDetail(btn.dataset.memberId,btn.dataset.statDetail); });
+    document.getElementById("stat-detail-close")?.addEventListener("click",closeStatDetail);
+    document.getElementById("stat-detail-close-x")?.addEventListener("click",closeStatDetail);
+    document.getElementById("stat-detail-modal")?.addEventListener("click",e=>{ if(e.target.id==="stat-detail-modal") closeStatDetail(); });
 
     function setStatsMainView(view){
       const stats=document.getElementById("player-stats-panel"), live=document.getElementById("live-entry-panel"), sb=document.getElementById("stats-view-button"), lb=document.getElementById("live-view-button");
