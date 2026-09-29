@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.19</title>
+  <title>Okayama Girls v7.20</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -189,6 +189,14 @@
     .notice-log-row { padding:.62rem 0; border-bottom:1px solid #E7EAF0; }
     .notice-list-scroll.notice-has-more { height:calc(var(--notice-row-height, 44px) * 3); }
     .notice-log-row:last-child { border-bottom:0; }
+    /* v7.20: notice selection/delete only. Other UI remains unchanged. */
+    .notice-action-buttons { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; justify-content:flex-end; }
+    .notice-delete-select { display:none; width:20px; height:20px; flex:0 0 20px; accent-color:#C8102E; }
+    #home-notice-text.notice-delete-mode .notice-log-row { display:flex; align-items:flex-start; gap:.55rem; cursor:pointer; }
+    #home-notice-text.notice-delete-mode .notice-delete-select { display:block; margin-top:.05rem; }
+    #home-notice-text.notice-delete-mode .notice-log-content { flex:1; min-width:0; }
+    #notice-delete-bar { display:none; align-items:center; justify-content:space-between; gap:.5rem; margin-top:.55rem; padding-top:.55rem; border-top:1px solid #E7EAF0; }
+    #notice-delete-bar.active { display:flex; }
     @media (max-width:360px) {
       .og-header-logo-wrap { width:165px; max-width:50vw; height:44px; }
       .header-account-pill { padding-left:.55rem !important; padding-right:.55rem !important; font-size:9px !important; }
@@ -246,9 +254,19 @@
               <div class="home-kicker"><i class="fa-solid fa-bullhorn mr-1"></i>NOTICE</div>
               <div class="text-sm font-black mt-1">連絡事項</div>
             </div>
-            <button id="edit-notice-button" type="button" class="shrink-0 text-[10px] font-black text-team-red bg-red-50 px-3 py-2 rounded-xl"><i class="fa-solid fa-pen mr-1"></i>連絡を投稿</button>
+            <div class="notice-action-buttons shrink-0">
+              <button id="delete-notice-button" type="button" class="text-[10px] font-black text-gray-500 bg-gray-100 px-3 py-2 rounded-xl"><i class="fa-solid fa-trash-can mr-1"></i>選択して削除</button>
+              <button id="edit-notice-button" type="button" class="text-[10px] font-black text-team-red bg-red-50 px-3 py-2 rounded-xl"><i class="fa-solid fa-pen mr-1"></i>連絡を投稿</button>
+            </div>
           </div>
           <div id="home-notice-text" class="notice-list-scroll mt-2 w-full"><p class="text-xs text-gray-500">読込中...</p></div>
+          <div id="notice-delete-bar">
+            <span id="notice-selected-count" class="text-[10px] font-bold text-gray-500">0件選択</span>
+            <div class="flex gap-2">
+              <button id="cancel-notice-delete-button" type="button" class="text-[10px] font-black text-gray-600 bg-gray-100 px-3 py-2 rounded-xl">キャンセル</button>
+              <button id="confirm-notice-delete-button" type="button" class="text-[10px] font-black text-white bg-team-red px-3 py-2 rounded-xl disabled:opacity-40" disabled><i class="fa-solid fa-trash-can mr-1"></i>選択した連絡を削除</button>
+            </div>
+          </div>
         </div>
 
         <div class="home-card p-3.5">
@@ -678,8 +696,10 @@
           wrap.innerHTML = notices.map(n => {
             const safeText = String(n.text || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
             const safeDate = String(n.dateLabel || "").replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-            return `<div class="notice-log-row"><p class="text-xs text-gray-700 whitespace-pre-wrap break-words"><span class="font-black text-team-red">${safeDate}</span>${safeDate ? '　' : ''}${safeText}</p></div>`;
+            return `<div class="notice-log-row" data-notice-id="${n.id}"><input class="notice-delete-select" type="checkbox" aria-label="この連絡事項を削除対象に選択"><p class="notice-log-content text-xs text-gray-700 whitespace-pre-wrap break-words"><span class="font-black text-team-red">${safeDate}</span>${safeDate ? '　' : ''}${safeText}</p></div>`;
           }).join("");
+          if (noticeDeleteMode) wrap.classList.add("notice-delete-mode");
+          updateNoticeDeleteSelection();
           const rows = [...wrap.querySelectorAll(".notice-log-row")];
           if (rows.length > 3) {
             const visibleHeight = rows.slice(0, 3).reduce((sum, row) => sum + row.getBoundingClientRect().height, 0);
@@ -1589,6 +1609,65 @@
         console.warn("NOTICE_CLEANUP_ERROR", error);
       }
     }
+
+    let noticeDeleteMode = false;
+
+    function updateNoticeDeleteSelection() {
+      const selected = [...document.querySelectorAll(".notice-delete-select:checked")];
+      const count = document.getElementById("notice-selected-count");
+      const confirmButton = document.getElementById("confirm-notice-delete-button");
+      if (count) count.textContent = `${selected.length}件選択`;
+      if (confirmButton) confirmButton.disabled = selected.length === 0;
+    }
+
+    function setNoticeDeleteMode(enabled) {
+      noticeDeleteMode = enabled;
+      const wrap = document.getElementById("home-notice-text");
+      const bar = document.getElementById("notice-delete-bar");
+      const toggle = document.getElementById("delete-notice-button");
+      wrap?.classList.toggle("notice-delete-mode", enabled);
+      bar?.classList.toggle("active", enabled);
+      if (toggle) toggle.classList.toggle("hidden", enabled);
+      if (!enabled) document.querySelectorAll(".notice-delete-select").forEach(cb => cb.checked = false);
+      updateNoticeDeleteSelection();
+    }
+
+    document.getElementById("delete-notice-button")?.addEventListener("click", () => setNoticeDeleteMode(true));
+    document.getElementById("cancel-notice-delete-button")?.addEventListener("click", () => setNoticeDeleteMode(false));
+    document.getElementById("home-notice-text")?.addEventListener("click", (event) => {
+      if (!noticeDeleteMode) return;
+      const row = event.target.closest(".notice-log-row");
+      if (!row) return;
+      const checkbox = row.querySelector(".notice-delete-select");
+      if (!checkbox) return;
+      if (event.target !== checkbox) checkbox.checked = !checkbox.checked;
+      updateNoticeDeleteSelection();
+    });
+    document.getElementById("home-notice-text")?.addEventListener("change", updateNoticeDeleteSelection);
+
+    document.getElementById("confirm-notice-delete-button")?.addEventListener("click", async () => {
+      const selected = [...document.querySelectorAll(".notice-delete-select:checked")];
+      if (!selected.length) return;
+      const count = selected.length;
+      if (!confirm(`選択した${count}件の連絡事項を削除します。よろしいですか？\nこの操作は元に戻せません。`)) return;
+      const button = document.getElementById("confirm-notice-delete-button");
+      const original = button.innerHTML;
+      button.disabled = true;
+      button.textContent = "削除中...";
+      try {
+        await Promise.all(selected.map(cb => {
+          const id = cb.closest(".notice-log-row")?.dataset.noticeId;
+          return id ? deleteDoc(doc(db, "notices", id)) : Promise.resolve();
+        }));
+        setNoticeDeleteMode(false);
+      } catch (error) {
+        console.error("NOTICE_DELETE_ERROR", error);
+        alert("連絡事項を削除できませんでした。Firestoreルールを確認してください。");
+      } finally {
+        button.innerHTML = original;
+        updateNoticeDeleteSelection();
+      }
+    });
 
     document.getElementById("edit-notice-button")?.addEventListener("click", () => {
       document.getElementById("notice-input").value = "";
