@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.4</title>
+  <title>Okayama Girls v7.5</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -100,6 +100,19 @@
       #live-game-panel.live-fullscreen .count-panel-large .count-controls button { min-height:32px; }
       #live-game-panel.live-fullscreen #play-log { max-height:90px; }
     }
+
+    /* v7.5: scoreboard is the inning/half/score controller. */
+    .inning-table td.score-cell { cursor:pointer; user-select:none; -webkit-user-select:none; transition:transform .08s ease, background .15s ease; }
+    .inning-table td.score-cell:active { transform:scale(.92); }
+    .inning-table td.score-cell.current-inning { outline:2px solid rgba(255,255,255,.72); outline-offset:-2px; background:rgba(255,255,255,.18); }
+    #score-cell-modal { position:fixed; inset:0; z-index:160; display:flex; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.58); padding:12px; }
+    #score-cell-modal.hidden { display:none; }
+    #score-cell-sheet { width:min(100%,420px); background:#101827; color:white; border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:16px; box-shadow:0 18px 60px rgba(0,0,0,.45); }
+    #score-cell-value { min-width:42px; text-align:center; font-size:1.65rem; font-weight:900; }
+    .score-sheet-btn { min-height:48px; border-radius:14px; font-weight:900; }
+    #live-game-panel.live-fullscreen .live-lower { overflow-y:hidden; }
+    #live-game-panel.live-fullscreen .play-log-box { flex:1 1 auto; min-height:68px; overflow:hidden; }
+    #live-game-panel.live-fullscreen #play-log { max-height:100%; overflow:auto; }
   </style>
 </head>
 <body class="text-gray-800 antialiased">
@@ -198,13 +211,13 @@
           </div>
 
           <div class="live-body p-4 space-y-4">
-            <div class="grid grid-cols-2 gap-2 text-center">
-              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">イニング</div><div class="flex justify-center gap-2 mt-1"><button id="inning-down" class="px-2">−</button><b id="live-inning" class="text-xl">1</b><button id="inning-up" class="px-2">＋</button></div></div>
-              <button id="half-toggle" class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">表 / 裏</div><b id="live-half" class="text-xl">表</b></button>
-            </div>
-            <div class="grid grid-cols-2 gap-2 text-center">
-              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">Okayama Girls</div><div class="flex justify-center items-center gap-3 mt-1"><button id="team-score-down" class="px-2">−</button><b id="live-team-score" class="text-xl">0</b><button id="team-score-up" class="px-2">＋</button></div></div>
-              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">相手</div><div class="flex justify-center items-center gap-3 mt-1"><button id="opp-score-down" class="px-2">−</button><b id="live-opp-score" class="text-xl">0</b><button id="opp-score-up" class="px-2">＋</button></div></div>
+            <!-- v7.5: inning/half and score controls are consolidated into the scoreboard cells.
+                 Hidden compatibility controls keep the existing state logic intact. -->
+            <div class="hidden" aria-hidden="true">
+              <button id="inning-down" type="button">−</button><b id="live-inning">1</b><button id="inning-up" type="button">＋</button>
+              <button id="half-toggle" type="button"><b id="live-half">表</b></button>
+              <button id="team-score-down" type="button">−</button><b id="live-team-score">0</b><button id="team-score-up" type="button">＋</button>
+              <button id="opp-score-down" type="button">−</button><b id="live-opp-score">0</b><button id="opp-score-up" type="button">＋</button>
             </div>
 
             <div class="scoreboard-full">
@@ -336,6 +349,22 @@
         <button id="cancel-member-button" type="button" class="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold">キャンセル</button>
         <button id="save-member-button" type="button" class="flex-1 bg-team-red text-white py-2 rounded-lg text-xs font-bold">保存</button>
       </div>
+    </div>
+  </div>
+
+  <div id="score-cell-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="score-cell-title">
+    <div id="score-cell-sheet">
+      <div class="flex items-start justify-between gap-3">
+        <div><div class="text-[10px] text-gray-400 font-bold">イニング別得点</div><div id="score-cell-title" class="text-lg font-black mt-1">1回表 OKAYAMA</div></div>
+        <button id="score-cell-close" type="button" class="w-9 h-9 rounded-full bg-white/10 font-black">×</button>
+      </div>
+      <div class="mt-4 flex items-center justify-center gap-4">
+        <button id="score-cell-minus" type="button" class="score-sheet-btn w-16 bg-white/10 text-2xl">−</button>
+        <div id="score-cell-value">0</div>
+        <button id="score-cell-plus" type="button" class="score-sheet-btn w-16 bg-team-red text-2xl">＋</button>
+      </div>
+      <button id="score-cell-move" type="button" class="score-sheet-btn w-full mt-4 bg-white text-gray-900">この回へ移動</button>
+      <div class="text-[10px] text-gray-400 text-center mt-2">得点だけ直す場合は − / ＋ を使用</div>
     </div>
   </div>
 
@@ -847,12 +876,54 @@
       recalcTotalsFromInnings();
     }
 
+    let selectedScoreCell=null;
+
+    function halfForBucket(bucket) {
+      if(currentLiveSide === "先攻") return bucket === "team" ? "表" : "裏";
+      return bucket === "team" ? "裏" : "表";
+    }
+
     function renderInningScoreboard() {
       const maxInning=Math.max(7, liveState.inning||1, ...Object.keys(liveState.inningScores?.team||{}).map(Number), ...Object.keys(liveState.inningScores?.opponent||{}).map(Number));
       const heads=Array.from({length:maxInning},(_,i)=>i+1);
       const activeBucket=currentScoreBucket();
-      const row=(label,bucket,total)=>`<tr><td class="team-name">${label}</td>${heads.map(n=>`<td class="${n===liveState.inning && bucket===activeBucket?'current-inning':''}">${liveState.inningScores?.[bucket]?.[String(n)] ?? ''}</td>`).join('')}<td class="total">${total||0}</td></tr>`;
-      document.getElementById("inning-scoreboard").innerHTML=`<table class="inning-table"><thead><tr><th class="team-name">TEAM</th>${heads.map(n=>`<th>${n}</th>`).join('')}<th class="total">計</th></tr></thead><tbody>${row('OKAYAMA','team',liveState.teamScore)}${row('相手','opponent',liveState.opponentScore)}</tbody></table>`;
+      const row=(label,bucket,total)=>`<tr><td class="team-name">${label}</td>${heads.map(n=>`<td role="button" tabindex="0" data-score-bucket="${bucket}" data-score-inning="${n}" class="score-cell ${n===liveState.inning && bucket===activeBucket?'current-inning':''}">${liveState.inningScores?.[bucket]?.[String(n)] ?? ''}</td>`).join('')}<td class="total">${total||0}</td></tr>`;
+      const board=document.getElementById("inning-scoreboard");
+      board.innerHTML=`<table class="inning-table"><thead><tr><th class="team-name">TEAM</th>${heads.map(n=>`<th>${n}</th>`).join('')}<th class="total">計</th></tr></thead><tbody>${row('OKAYAMA','team',liveState.teamScore)}${row('相手','opponent',liveState.opponentScore)}</tbody></table>`;
+      board.querySelectorAll(".score-cell").forEach(cell=>{
+        const open=()=>openScoreCell(cell.dataset.scoreBucket, Number(cell.dataset.scoreInning));
+        cell.addEventListener("click",open);
+        cell.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} });
+      });
+    }
+
+    function openScoreCell(bucket, inning) {
+      selectedScoreCell={bucket,inning};
+      const half=halfForBucket(bucket);
+      const teamLabel=bucket==="team"?"OKAYAMA":"相手";
+      document.getElementById("score-cell-title").textContent=`${inning}回${half} ${teamLabel}`;
+      document.getElementById("score-cell-value").textContent=liveState.inningScores?.[bucket]?.[String(inning)] ?? 0;
+      document.getElementById("score-cell-modal").classList.remove("hidden");
+    }
+
+    function closeScoreCell() {
+      selectedScoreCell=null;
+      document.getElementById("score-cell-modal").classList.add("hidden");
+    }
+
+    function changeSelectedScore(delta) {
+      if(!selectedScoreCell) return;
+      const {bucket,inning}=selectedScoreCell;
+      liveState.inningScores=normalizeInningScores(liveState.inningScores);
+      const key=String(inning);
+      const old=Number(liveState.inningScores[bucket][key]||0);
+      liveState.inningScores[bucket][key]=Math.max(0,old+delta);
+      recalcTotalsFromInnings();
+      document.getElementById("score-cell-value").textContent=liveState.inningScores[bucket][key];
+      renderInningScoreboard();
+      document.getElementById("live-team-score").textContent=liveState.teamScore||0;
+      document.getElementById("live-opp-score").textContent=liveState.opponentScore||0;
+      markLiveChanged();
     }
 
     function hideInningUndo() {
@@ -882,6 +953,21 @@
       pendingPlayRuns=0;
       updateLiveUI(); markLiveChanged(); showInningUndo(snapshot);
     }
+
+    document.getElementById("score-cell-close").addEventListener("click",closeScoreCell);
+    document.getElementById("score-cell-modal").addEventListener("click",e=>{ if(e.target.id==="score-cell-modal") closeScoreCell(); });
+    document.getElementById("score-cell-minus").addEventListener("click",()=>changeSelectedScore(-1));
+    document.getElementById("score-cell-plus").addEventListener("click",()=>changeSelectedScore(1));
+    document.getElementById("score-cell-move").addEventListener("click",()=>{
+      if(!selectedScoreCell) return;
+      const {bucket,inning}=selectedScoreCell;
+      if(!confirm(`${inning}回${halfForBucket(bucket)}へ移動します。よろしいですか？`)) return;
+      hideInningUndo();
+      liveState.inning=inning;
+      liveState.half=halfForBucket(bucket);
+      liveState.ball=0; liveState.strike=0; liveState.out=0; pendingPlayRuns=0;
+      closeScoreCell(); updateLiveUI(); markLiveChanged();
+    });
 
     document.getElementById("inning-undo-button").addEventListener("click",()=>{
       if(!inningUndoSnapshot) return;
