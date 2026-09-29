@@ -389,7 +389,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, getDocs, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAjKw1wfK3OzQDmSs1iSttA2BLwZ9Zxw8k",
@@ -1099,15 +1099,105 @@
       updateLiveUI(); markLiveChanged();
     }));
 
+    function emptyPlayerStats(member) {
+      return {
+        memberId: member?.id || "",
+        name: member?.name || "",
+        num: member?.num || "",
+        batting: {pa:0, ab:0, h:0, doubles:0, triples:0, hr:0, rbi:0, bb:0, hbp:0, so:0, sh:0, sf:0, sb:0, avg:0},
+        pitching: {outs:0, innings:"0.0", h:0, hr:0, bb:0, hbp:0, so:0, runs:0}
+      };
+    }
+
+    function formatInningsFromOuts(outs) {
+      outs = Math.max(0, Number(outs)||0);
+      return `${Math.floor(outs/3)}.${outs%3}`;
+    }
+
+    function calculatePlayerStatsFromLogs(logs=[]) {
+      const map = new Map();
+      const ensure = id => {
+        if(!id) return null;
+        if(!map.has(id)) map.set(id, emptyPlayerStats(currentMembers.find(m=>m.id===id)));
+        return map.get(id);
+      };
+      const hits = new Set(["単打","二塁打","三塁打","本塁打"]);
+      const atBats = new Set(["単打","二塁打","三塁打","本塁打","三振","凡打","失策"]);
+      const plateApps = new Set(["単打","二塁打","三塁打","本塁打","四球","死球","三振","凡打","犠打","犠飛","失策"]);
+      const outResults = new Set(["三振","凡打","犠打","犠飛"]);
+
+      for(const p of logs || []) {
+        if(p.mode === "攻撃") {
+          const id=p.batterId || p.playerId;
+          const st=ensure(id);
+          if(!st) continue;
+          const r=p.result;
+          if(plateApps.has(r)) st.batting.pa++;
+          if(atBats.has(r)) st.batting.ab++;
+          if(hits.has(r)) st.batting.h++;
+          if(r==="二塁打") st.batting.doubles++;
+          if(r==="三塁打") st.batting.triples++;
+          if(r==="本塁打") st.batting.hr++;
+          if(r==="四球") st.batting.bb++;
+          if(r==="死球") st.batting.hbp++;
+          if(r==="三振") st.batting.so++;
+          if(r==="犠打") st.batting.sh++;
+          if(r==="犠飛") st.batting.sf++;
+          if(r==="盗塁") st.batting.sb++;
+          st.batting.rbi += Number(p.rbi)||0;
+        } else if(p.mode === "守備") {
+          const id=p.pitcherId || p.playerId;
+          const st=ensure(id);
+          if(!st) continue;
+          const r=p.result;
+          if(hits.has(r)) st.pitching.h++;
+          if(r==="本塁打") st.pitching.hr++;
+          if(r==="四球") st.pitching.bb++;
+          if(r==="死球") st.pitching.hbp++;
+          if(r==="三振") st.pitching.so++;
+          if(outResults.has(r)) st.pitching.outs++;
+          st.pitching.runs += Number(p.runsAllowed)||0;
+        }
+      }
+      for(const st of map.values()) {
+        st.batting.avg = st.batting.ab ? Number((st.batting.h/st.batting.ab).toFixed(3)) : 0;
+        st.pitching.innings = formatInningsFromOuts(st.pitching.outs);
+      }
+      return map;
+    }
+
+    async function rebuildGamePlayerStats() {
+      if(!liveGameId) throw new Error("game id is missing");
+      const statsRef=collection(db,"games",liveGameId,"playerStats");
+      const old=await getDocs(statsRef);
+      await Promise.all(old.docs.map(d=>deleteDoc(d.ref)));
+      const stats=calculatePlayerStatsFromLogs(liveState.logs || []);
+      await Promise.all([...stats.entries()].map(([memberId,st]) =>
+        setDoc(doc(db,"games",liveGameId,"playerStats",memberId), {
+          ...st, gameId:liveGameId, eventId:document.getElementById("live-event-select").value, updatedAt:Timestamp.now()
+        })
+      ));
+      await setDoc(doc(db,"games",liveGameId), {statsGeneratedAt:Timestamp.now()}, {merge:true});
+      return stats.size;
+    }
+
     document.getElementById("live-finish-button").addEventListener("click",async()=>{
-      if(!confirm("試合を終了します。よろしいですか？\n現在の内容を保存して試合を終了します。")) return;
+      if(!confirm("試合を終了します。よろしいですか？\n現在の内容を保存し、個人成績を自動集計します。")) return;
       liveState.status="finished";
       const ok=await saveLiveGame(false);
       if(ok){
-        document.getElementById("live-save-state").textContent="試合終了・保存済み";
-        showLiveToast("✓ 試合を終了して保存しました",true);
-        hideInningUndo();
-        setTimeout(leaveLiveMode,700);
+        try {
+          const count=await rebuildGamePlayerStats();
+          document.getElementById("live-save-state").textContent="試合終了・成績集計済み";
+          showLiveToast(`✓ 試合終了・${count}名の成績を集計しました`,true);
+          hideInningUndo();
+          setTimeout(leaveLiveMode,1100);
+        } catch(e) {
+          console.error("PLAYER_STATS_ERROR",e);
+          document.getElementById("live-save-state").textContent="試合保存済み・成績集計エラー";
+          showLiveToast("試合は保存済みですが、成績集計に失敗しました",false);
+          alert("試合データは保存されていますが、個人成績の自動集計に失敗しました。Firestore Rules の games/{gameId}/playerStats を確認してください。");
+        }
       }
     });
 
