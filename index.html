@@ -18,26 +18,25 @@
 <body class="text-gray-800 antialiased">
 
   <!-- ログイン -->
-  <div id="login-screen" class="min-h-screen flex items-center justify-center p-5 bg-gray-100">
-    <div class="w-full max-w-sm bg-white rounded-3xl shadow-lg overflow-hidden">
-      <div class="bg-team-black text-white p-7 text-center">
-        <div class="mx-auto w-16 h-16 rounded-full bg-white text-team-red flex items-center justify-center text-2xl font-black mb-3">OG</div>
+  <div id="login-screen" class="min-h-screen flex items-center justify-center p-5 bg-gray-50">
+    <div class="w-full max-w-sm">
+      <div class="text-center mb-7">
+        <div class="mx-auto w-16 h-16 rounded-full bg-team-red text-white flex items-center justify-center text-2xl font-black mb-3 shadow-lg">OG</div>
         <h1 class="text-2xl font-black tracking-wider">Okayama Girls</h1>
-        <p class="text-xs text-gray-300 mt-1">女子ソフトボールチーム</p>
+        <p class="text-xs text-gray-400 mt-1">女子ソフトボールチーム</p>
+        <div class="w-12 h-1 bg-team-red rounded-full mx-auto mt-3"></div>
       </div>
-      <form id="login-form" class="p-6 space-y-4">
-        <div>
-          <label for="login-email" class="block text-xs font-bold text-gray-600 mb-1">メールアドレス</label>
-          <input id="login-email" type="email" autocomplete="email" required class="w-full border rounded-xl p-3 text-base" placeholder="example@email.com">
-        </div>
-        <div>
-          <label for="login-password" class="block text-xs font-bold text-gray-600 mb-1">パスワード</label>
-          <input id="login-password" type="password" autocomplete="current-password" required class="w-full border rounded-xl p-3 text-base" placeholder="パスワード">
-        </div>
-        <p id="login-error" class="hidden text-sm text-red-600 bg-red-50 rounded-lg p-3"></p>
-        <button id="login-button" type="submit" class="w-full bg-team-red text-white font-bold py-3 rounded-xl shadow btn-active">ログイン</button>
-        <p id="auth-status" class="text-[11px] text-center text-gray-400">Firebase認証</p>
-      </form>
+      <div class="bg-white rounded-3xl border shadow-sm p-5 mb-4">
+        <div class="font-bold text-sm mb-3">管理者はこちら <span class="text-[10px] text-gray-400">ADMIN</span></div>
+        <input id="admin-pass" type="password" autocomplete="current-password" placeholder="管理者専用PASS" class="w-full border rounded-xl p-3 text-base">
+        <button id="admin-login-button" type="button" class="w-full mt-3 bg-team-red text-white font-bold py-3 rounded-xl btn-active">管理者としてログイン</button>
+      </div>
+      <div class="bg-white rounded-3xl border shadow-sm p-5">
+        <div class="font-bold text-sm mb-3">メンバーはこちら <span class="text-[10px] text-gray-400">MEMBER</span></div>
+        <input id="member-pass" type="password" autocomplete="current-password" placeholder="メンバー共通PASS" class="w-full border rounded-xl p-3 text-base">
+        <button id="member-login-button" type="button" class="w-full mt-3 bg-team-black text-white font-bold py-3 rounded-xl btn-active">メンバーとしてログイン</button>
+      </div>
+      <p id="login-error" class="hidden text-sm text-red-600 bg-red-50 rounded-lg p-3 mt-4 text-center"></p>
     </div>
   </div>
 
@@ -174,9 +173,7 @@
 
     const loginScreen = document.getElementById("login-screen");
     const appScreen = document.getElementById("app-screen");
-    const loginForm = document.getElementById("login-form");
     const loginError = document.getElementById("login-error");
-    const loginButton = document.getElementById("login-button");
     let currentRole = "member";
     let unsubscribeMembers = null;
     let unsubscribeHeader = null;
@@ -204,23 +201,25 @@
       return "ログインできませんでした。(" + (code || "unknown") + ")";
     }
 
-    loginForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    async function sharedLogin(email, password, button) {
       clearError();
-      loginButton.disabled = true;
-      loginButton.textContent = "ログイン中...";
-      try {
-        const email = document.getElementById("login-email").value.trim();
-        const password = document.getElementById("login-password").value;
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (error) {
+      if (!password) return showError("PASSを入力してください。");
+      const original = button.textContent;
+      button.disabled = true; button.textContent = "ログイン中...";
+      try { await signInWithEmailAndPassword(auth, email, password); }
+      catch (error) {
         console.error("LOGIN_ERROR", error);
-        showError(friendlyAuthError(error));
-      } finally {
-        loginButton.disabled = false;
-        loginButton.textContent = "ログイン";
-      }
-    });
+        const code = error?.code || "";
+        showError(code.includes("too-many-requests") ? "試行回数が多いため一時的に制限されています。" : "PASSを確認してください。");
+      } finally { button.disabled = false; button.textContent = original; }
+    }
+
+    const adminLoginButton = document.getElementById("admin-login-button");
+    const memberLoginButton = document.getElementById("member-login-button");
+    adminLoginButton.addEventListener("click", () => sharedLogin("symi0613@icloud.com", document.getElementById("admin-pass").value, adminLoginButton));
+    memberLoginButton.addEventListener("click", () => sharedLogin("okayama.girls.member@gmail.com", document.getElementById("member-pass").value, memberLoginButton));
+    document.getElementById("admin-pass").addEventListener("keydown", e => { if(e.key==="Enter") adminLoginButton.click(); });
+    document.getElementById("member-pass").addEventListener("keydown", e => { if(e.key==="Enter") memberLoginButton.click(); });
 
     document.getElementById("logout-button").addEventListener("click", async () => {
       await signOut(auth);
@@ -248,7 +247,7 @@
       document.getElementById("role-badge").textContent = currentRole;
       document.getElementById("welcome-user").textContent = user.email || "";
       document.getElementById("add-member-button").classList.toggle("hidden", currentRole !== "admin");
-      document.getElementById("add-event-button").classList.toggle("hidden", currentRole !== "admin");
+      document.getElementById("add-event-button").classList.toggle("hidden", !["admin","member"].includes(currentRole));
       loginScreen.classList.add("hidden");
       appScreen.classList.remove("hidden");
       startRealtimeData();
@@ -385,7 +384,7 @@
               <div class="text-[11px] text-gray-500 mt-1">${escapeHtml(formatEventDate(e.date))}</div>
               <div class="text-[11px] text-gray-500">${escapeHtml(e.place || "場所未設定")}${e.opponent ? " / vs " + escapeHtml(e.opponent) : ""}</div>
             </button>
-            ${currentRole==="admin" ? `<div class="flex flex-col gap-2">
+            ${["admin","member"].includes(currentRole) ? `<div class="flex flex-col gap-2">
               <button type="button" class="edit-event text-[10px] font-bold text-blue-600" data-id="${e.id}">編集</button>
               <button type="button" class="delete-event text-[10px] font-bold text-red-600" data-id="${e.id}">削除</button>
             </div>` : ""}
@@ -393,7 +392,7 @@
         </div>`).join("");
 
       document.querySelectorAll(".select-event").forEach(b => b.addEventListener("click", () => selectEvent(b.dataset.id)));
-      if (currentRole === "admin") {
+      if (["admin","member"].includes(currentRole)) {
         document.querySelectorAll(".edit-event").forEach(b => b.addEventListener("click", () => openEventModal(b.dataset.id)));
         document.querySelectorAll(".delete-event").forEach(b => b.addEventListener("click", async () => {
           const e = currentEvents.find(x => x.id === b.dataset.id);
@@ -472,7 +471,7 @@
     });
 
     function openEventModal(id) {
-      if (currentRole !== "admin") return;
+      if (!["admin","member"].includes(currentRole)) return;
       editingEventId = id;
       const e = id ? currentEvents.find(x => x.id === id) : null;
       document.getElementById("event-modal-title").textContent = e ? "予定を編集" : "予定を追加";
@@ -486,7 +485,7 @@
     }
 
     document.getElementById("save-event-button").addEventListener("click", async () => {
-      if (currentRole !== "admin") return;
+      if (!["admin","member"].includes(currentRole)) return;
       const type = document.getElementById("event-type").value;
       const status = document.getElementById("event-status").value;
       const name = document.getElementById("event-name").value.trim();
