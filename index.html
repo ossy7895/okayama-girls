@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls</title>
+  <title>Okayama Girls v7</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -125,14 +125,17 @@
         <div id="live-game-panel" class="hidden rounded-3xl overflow-hidden shadow-xl bg-[#101827] text-white">
           <div class="p-4 bg-team-red flex items-center justify-between">
             <div><div class="text-[10px] opacity-80">LIVE SCORE</div><div id="live-game-title" class="font-black text-lg">試合</div></div>
-            <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">保存せず終了</button>
+            <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">スコアモード終了</button>
           </div>
 
           <div class="live-body p-4 space-y-4">
-            <div class="grid grid-cols-3 gap-2 text-center">
-              <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">イニング</div><div class="flex justify-center gap-2 mt-1"><button id="inning-down" class="px-2">−</button><b id="live-inning" class="text-xl">1</b><button id="inning-up" class="px-2">＋</button></div></div>
-              <button id="half-toggle" class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">攻守</div><b id="live-half" class="text-xl">表</b></button>
-              <div class="bg-white/10 rounded-xl p-3"><div class="text-[10px] text-gray-300">得点</div><div class="flex justify-center gap-2 mt-1"><button id="score-down" class="px-2">−</button><b id="live-score" class="text-xl">0</b><button id="score-up" class="px-2">＋</button></div></div>
+            <div class="grid grid-cols-2 gap-2 text-center">
+              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">イニング</div><div class="flex justify-center gap-2 mt-1"><button id="inning-down" class="px-2">−</button><b id="live-inning" class="text-xl">1</b><button id="inning-up" class="px-2">＋</button></div></div>
+              <button id="half-toggle" class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">表 / 裏</div><b id="live-half" class="text-xl">表</b></button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-center">
+              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">Okayama Girls</div><div class="flex justify-center items-center gap-3 mt-1"><button id="team-score-down" class="px-2">−</button><b id="live-team-score" class="text-xl">0</b><button id="team-score-up" class="px-2">＋</button></div></div>
+              <div class="bg-white/10 rounded-xl p-2"><div class="text-[10px] text-gray-300">相手</div><div class="flex justify-center items-center gap-3 mt-1"><button id="opp-score-down" class="px-2">−</button><b id="live-opp-score" class="text-xl">0</b><button id="opp-score-up" class="px-2">＋</button></div></div>
             </div>
 
             <div id="live-mode-banner" class="rounded-2xl bg-white/10 border border-white/10 px-4 py-2 flex items-center justify-between">
@@ -164,7 +167,15 @@
             </div>
 
             <div>
-              <div id="result-title" class="text-xs font-black mb-2">打席結果</div>
+              <div class="flex items-center justify-between mb-2">
+                <div id="result-title" class="text-xs font-black">打席結果</div>
+                <div class="flex items-center gap-2 bg-white/10 rounded-xl px-2 py-1">
+                  <span id="play-run-label" class="text-[10px] font-bold text-gray-300">打点</span>
+                  <button id="play-run-down" type="button" class="w-7 h-7 rounded-lg bg-white/10 font-black">−</button>
+                  <b id="play-run-count" class="w-4 text-center">0</b>
+                  <button id="play-run-up" type="button" class="w-7 h-7 rounded-lg bg-white/10 font-black">＋</button>
+                </div>
+              </div>
               <div id="result-buttons" class="grid grid-cols-3 gap-2"></div>
             </div>
 
@@ -287,7 +298,8 @@
     let unsubscribeAttendance = null;
     let liveGameId = null;
     let currentLiveSide = "";
-    let liveState = {inning:1, half:"表", score:0, ball:0, strike:0, out:0, pitcherId:"", batterId:"", logs:[], status:"in_progress"};
+    let liveState = {inning:1, half:"表", teamScore:0, opponentScore:0, ball:0, strike:0, out:0, pitcherId:"", batterId:"", logs:[], status:"in_progress"};
+    let pendingPlayRuns = 0;
 
     function showError(message) {
       loginError.textContent = message;
@@ -738,7 +750,10 @@
       document.getElementById("live-offense-player").classList.toggle("hidden", !isOffense);
       document.getElementById("live-defense-player").classList.toggle("hidden", isOffense);
       document.getElementById("result-title").textContent = isOffense ? "打席結果（自チーム）" : "相手打者の結果（投手記録）";
-      document.getElementById("live-score").textContent=liveState.score;
+      document.getElementById("live-team-score").textContent=liveState.teamScore || 0;
+      document.getElementById("live-opp-score").textContent=liveState.opponentScore || 0;
+      document.getElementById("play-run-label").textContent = isOffense ? "打点" : "失点";
+      document.getElementById("play-run-count").textContent = pendingPlayRuns;
       document.getElementById("ball-count").textContent=liveState.ball;
       document.getElementById("strike-count").textContent=liveState.strike;
       document.getElementById("out-count").textContent=liveState.out;
@@ -749,7 +764,7 @@
       document.getElementById("live-batter").value=liveState.batterId || "";
       const log=document.getElementById("play-log");
       log.innerHTML=liveState.logs?.length ? [...liveState.logs].reverse().map(x =>
-        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b> <span class="text-gray-400">${escapeHtml(x.mode || "")}</span>　${escapeHtml(x.batterName || x.pitcherName || "選手未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span></div>`).join("")
+        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b> <span class="text-gray-400">${escapeHtml(x.mode || "")}</span>　${escapeHtml(x.playerName || x.batterName || x.pitcherName || "選手未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span>${(x.rbi||0)>0?` <span class="text-red-300 font-bold">打点${x.rbi}</span>`:""}${(x.runsAllowed||0)>0?` <span class="text-blue-300 font-bold">失点${x.runsAllowed}</span>`:""}</div>`).join("")
         : '<div class="text-gray-400">まだ記録がありません。</div>';
     }
 
@@ -771,13 +786,15 @@
             currentLiveSide = await chooseLiveSide({allowCancel:true});
             if (!currentLiveSide) return;
           }
-          liveState={inning:d.inning||1,half:d.half||"表",score:d.score||0,ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
+          liveState={inning:d.inning||1,half:d.half||"表",teamScore:d.teamScore ?? d.score ?? 0,opponentScore:d.opponentScore ?? 0,ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
+          pendingPlayRuns=0;
           liveSavedSnapshot=cloneLiveState(liveState);
           document.getElementById("live-save-state").textContent="保存済み";
         } else {
           currentLiveSide = await chooseLiveSide({allowCancel:true});
           if (!currentLiveSide) return;
-          liveState={inning:1,half:"表",score:0,ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
+          liveState={inning:1,half:"表",teamScore:0,opponentScore:0,ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
+          pendingPlayRuns=0;
           liveSavedSnapshot=null;
           document.getElementById("live-save-state").textContent="未保存";
         }
@@ -793,16 +810,20 @@
     });
 
     document.getElementById("live-close-button").addEventListener("click",()=>{
-      if(!confirm("保存せず終了します。よろしいですか？\n途中保存以降の変更は破棄されます。")) return;
+      if(!confirm("終了します。よろしいですか？\n保存していない内容は、失われてしまいます。")) return;
       if(liveSavedSnapshot) liveState=cloneLiveState(liveSavedSnapshot);
       leaveLiveMode();
     });
     document.getElementById("live-save-button").addEventListener("click",()=>saveLiveGame(true));
     document.getElementById("inning-up").addEventListener("click",()=>{liveState.inning++;updateLiveUI();markLiveChanged();});
     document.getElementById("inning-down").addEventListener("click",()=>{liveState.inning=Math.max(1,liveState.inning-1);updateLiveUI();markLiveChanged();});
-    document.getElementById("half-toggle").addEventListener("click",()=>{liveState.half=liveState.half==="表"?"裏":"表";updateLiveUI();markLiveChanged();});
-    document.getElementById("score-up").addEventListener("click",()=>{liveState.score++;updateLiveUI();markLiveChanged();});
-    document.getElementById("score-down").addEventListener("click",()=>{liveState.score=Math.max(0,liveState.score-1);updateLiveUI();markLiveChanged();});
+    document.getElementById("half-toggle").addEventListener("click",()=>{liveState.half=liveState.half==="表"?"裏":"表";pendingPlayRuns=0;updateLiveUI();markLiveChanged();});
+    document.getElementById("team-score-up").addEventListener("click",()=>{liveState.teamScore=(liveState.teamScore||0)+1;updateLiveUI();markLiveChanged();});
+    document.getElementById("team-score-down").addEventListener("click",()=>{liveState.teamScore=Math.max(0,(liveState.teamScore||0)-1);updateLiveUI();markLiveChanged();});
+    document.getElementById("opp-score-up").addEventListener("click",()=>{liveState.opponentScore=(liveState.opponentScore||0)+1;updateLiveUI();markLiveChanged();});
+    document.getElementById("opp-score-down").addEventListener("click",()=>{liveState.opponentScore=Math.max(0,(liveState.opponentScore||0)-1);updateLiveUI();markLiveChanged();});
+    document.getElementById("play-run-up").addEventListener("click",()=>{pendingPlayRuns=Math.min(9,pendingPlayRuns+1);updateLiveUI();});
+    document.getElementById("play-run-down").addEventListener("click",()=>{pendingPlayRuns=Math.max(0,pendingPlayRuns-1);updateLiveUI();});
     document.querySelectorAll(".count-btn").forEach(b=>b.addEventListener("click",()=>{
       const key=b.dataset.count, delta=Number(b.dataset.delta);
       const max=key==="ball"?3:key==="strike"?2:2;
@@ -825,9 +846,17 @@
       liveState.pitcherId=pitcherId||"";
       liveState.batterId=batterId||"";
       liveState.logs=liveState.logs||[];
-      liveState.logs.push({inning:liveState.inning,half:liveState.half,mode:isOffense?"攻撃":"守備",result:b.dataset.result,batterId:isOffense?batterId:"",batterName:isOffense?(batter?.name||"打者未選択"):(pitcher?.name||"投手未選択"),pitcherId:!isOffense?pitcherId:"",pitcherName:!isOffense?(pitcher?.name||""):"",at:new Date().toISOString()});
+      liveState.logs.push({
+        id: (crypto.randomUUID ? crypto.randomUUID() : Date.now()+"_"+Math.random().toString(36).slice(2)),
+        inning:liveState.inning, half:liveState.half, mode:isOffense?"攻撃":"守備", result:b.dataset.result,
+        playerId:isOffense?batterId:pitcherId, playerName:isOffense?(batter?.name||"打者未選択"):(pitcher?.name||"投手未選択"),
+        batterId:isOffense?batterId:"", pitcherId:!isOffense?pitcherId:"",
+        rbi:isOffense?pendingPlayRuns:0, runsAllowed:!isOffense?pendingPlayRuns:0,
+        at:new Date().toISOString()
+      });
       liveState.ball=0; liveState.strike=0;
       if(["三振","凡打","犠打","犠飛"].includes(b.dataset.result)) liveState.out=Math.min(2,liveState.out+1);
+      pendingPlayRuns=0;
       updateLiveUI(); markLiveChanged();
     }));
 
