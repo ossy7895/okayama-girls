@@ -18,11 +18,17 @@
     #live-game-panel.live-fullscreen .live-body { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:.55rem; padding:.7rem; }
     #live-game-panel.live-fullscreen .play-log-box { flex:1; min-height:58px; overflow:hidden; }
     #live-game-panel.live-fullscreen #play-log { max-height:100%; overflow:auto; }
-    .count-lamps { display:flex; justify-content:center; gap:.35rem; margin:.4rem 0; }
-    .count-lamp { width:18px; height:18px; border-radius:9999px; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); box-shadow:inset 0 0 0 1px rgba(0,0,0,.2); }
-    .count-lamp.on.ball { background:#22c55e; box-shadow:0 0 8px rgba(34,197,94,.7); }
-    .count-lamp.on.strike { background:#facc15; box-shadow:0 0 8px rgba(250,204,21,.7); }
-    .count-lamp.on.out { background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.7); }
+    .count-board { display:flex; flex-direction:column; gap:.5rem; padding:.25rem .35rem; }
+    .count-row { display:grid; grid-template-columns:28px 1fr; align-items:center; column-gap:.7rem; }
+    .count-label { font-size:1.25rem; line-height:1; font-weight:900; text-align:center; }
+    .count-lamps { display:flex; justify-content:flex-start; align-items:center; gap:.55rem; margin:0; }
+    .count-lamp { width:25px; height:25px; border-radius:9999px; background:transparent; border:2px solid currentColor; box-shadow:none; }
+    .count-lamp.ball { color:#22c55e; }
+    .count-lamp.strike { color:#facc15; }
+    .count-lamp.out { color:#ef4444; }
+    .count-lamp.on.ball { background:#22c55e; box-shadow:0 0 8px rgba(34,197,94,.65); }
+    .count-lamp.on.strike { background:#facc15; box-shadow:0 0 8px rgba(250,204,21,.65); }
+    .count-lamp.on.out { background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.65); }
     #live-toast { position:fixed; left:50%; top:max(14px, env(safe-area-inset-top)); transform:translateX(-50%); z-index:130; min-width:220px; max-width:90vw; padding:.8rem 1rem; border-radius:9999px; font-size:.8rem; font-weight:900; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25); }
   </style>
 </head>
@@ -133,10 +139,18 @@
               <div><label class="text-[10px] text-gray-300">現在の打者</label><select id="live-batter" class="w-full mt-1 bg-white text-gray-900 rounded-xl p-2.5 text-sm"></select></div>
             </div>
 
-            <div class="grid grid-cols-3 gap-3 text-center">
-              <div><div class="text-xs font-black text-green-400">B <span id="ball-count">0</span></div><div id="ball-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg py-2">＋</button></div></div>
-              <div><div class="text-xs font-black text-yellow-300">S <span id="strike-count">0</span></div><div id="strike-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg py-2">＋</button></div></div>
-              <div><div class="text-xs font-black text-red-400">O <span id="out-count">0</span></div><div id="out-lamps" class="count-lamps"></div><div class="flex gap-1"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg py-2">＋</button></div></div>
+            <div class="bg-black/20 rounded-2xl p-3">
+              <div class="count-board">
+                <div class="count-row"><div class="count-label text-green-400">B</div><div id="ball-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-yellow-300">S</div><div id="strike-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-red-400">O</div><div id="out-lamps" class="count-lamps"></div></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 mt-3">
+                <div class="flex gap-1"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg py-2">＋</button></div>
+                <div class="flex gap-1"><button data-count="strike" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="strike" data-delta="1" class="count-btn flex-1 bg-yellow-500 text-black rounded-lg py-2">＋</button></div>
+                <div class="flex gap-1"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg py-2">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg py-2">＋</button></div>
+              </div>
+              <span id="ball-count" class="hidden">0</span><span id="strike-count" class="hidden">0</span><span id="out-count" class="hidden">0</span>
             </div>
 
             <div>
