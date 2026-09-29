@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.6</title>
+  <title>Okayama Girls v7.8</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -213,11 +213,31 @@
       </section>
 
       <section id="tab-stats" class="tab-content hidden space-y-4">
-        <div class="flex items-center justify-between">
-          <div><h2 class="text-base font-black">LIVE 試合入力</h2><p class="text-[10px] text-gray-400">試合中の記録をその場で保存</p></div>
+        <div class="flex items-center justify-between gap-3">
+          <div><h2 class="text-base font-black">成績</h2><p class="text-[10px] text-gray-400">試合結果から個人成績を自動集計</p></div>
           <span id="live-save-state" class="text-[10px] font-bold text-gray-400">未開始</span>
         </div>
 
+        <div class="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl">
+          <button id="stats-view-button" type="button" class="bg-white text-team-red shadow-sm rounded-lg py-2 text-xs font-black">個人成績</button>
+          <button id="live-view-button" type="button" class="text-gray-500 rounded-lg py-2 text-xs font-black">LIVE入力</button>
+        </div>
+
+        <div id="player-stats-panel" class="space-y-3">
+          <div class="bg-white rounded-2xl border shadow-sm p-3">
+            <div class="flex items-center justify-between gap-2">
+              <div><div class="text-sm font-black">個人成績</div><div id="stats-summary" class="text-[10px] text-gray-400 mt-0.5">集計中...</div></div>
+              <button id="refresh-stats-button" type="button" class="text-[10px] font-bold text-team-red px-3 py-2 bg-red-50 rounded-lg">再読込</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-3">
+              <button id="batting-stats-button" type="button" class="bg-team-red text-white rounded-lg py-2 text-xs font-black">打撃成績</button>
+              <button id="pitching-stats-button" type="button" class="bg-gray-100 text-gray-500 rounded-lg py-2 text-xs font-black">投手成績</button>
+            </div>
+          </div>
+          <div id="player-stats-list" class="space-y-3"><div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">成績を読み込んでいます...</div></div>
+        </div>
+
+        <div id="live-entry-panel" class="hidden space-y-4">
         <div id="live-start-panel" class="bg-white rounded-2xl border shadow-sm p-4 space-y-3">
           <label class="text-xs font-bold">試合予定を選択</label>
           <select id="live-event-select" class="w-full border rounded-xl p-3 text-sm"><option value="">試合を選択してください</option></select>
@@ -307,6 +327,7 @@
             </div>
           </div>
         </div>
+        </div><!-- /live-entry-panel -->
       </section>
 
       <section id="tab-members" class="tab-content hidden space-y-3">
@@ -1201,12 +1222,71 @@
       }
     });
 
+
+    // v7.8: finished-game player stats dashboard. Aggregates saved per-game stats, never increments totals in place.
+    let statsDisplayMode = "batting";
+    let seasonPlayerStats = [];
+
+    function n(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
+    function formatAvg(h,ab){ return ab ? (h/ab).toFixed(3).replace(/^0/,"") : ".000"; }
+    function formatIP(outs){ return `${Math.floor(n(outs)/3)}.${n(outs)%3}`; }
+
+    async function loadPlayerStatsDashboard(){
+      const box=document.getElementById("player-stats-list");
+      const summary=document.getElementById("stats-summary");
+      if(!box||!summary) return;
+      box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">成績を読み込んでいます...</div>';
+      try {
+        const gameSnap=await getDocs(collection(db,"games"));
+        const finished=gameSnap.docs.filter(d=>d.data()?.status==="finished");
+        const totals=new Map();
+        for(const gd of finished){
+          const ps=await getDocs(collection(db,"games",gd.id,"playerStats"));
+          ps.forEach(sd=>{
+            const v=sd.data()||{}; const id=sd.id;
+            if(!totals.has(id)) totals.set(id,{memberId:id,name:v.name||"",num:v.num||"",pa:0,ab:0,h:0,doubles:0,triples:0,hr:0,rbi:0,bb:0,hbp:0,k:0,sh:0,sf:0,sb:0,pOuts:0,pH:0,pHR:0,pBB:0,pHBP:0,pK:0,pRuns:0,games:0});
+            const t=totals.get(id); t.games++;
+            ["pa","ab","h","doubles","triples","hr","rbi","bb","hbp","k","sh","sf","sb","pOuts","pH","pHR","pBB","pHBP","pK","pRuns"].forEach(k=>t[k]+=n(v[k]));
+            if(!t.name&&v.name)t.name=v.name; if(!t.num&&v.num)t.num=v.num;
+          });
+        }
+        seasonPlayerStats=[...totals.values()].map(t=>{ const m=currentMembers.find(x=>x.id===t.memberId); return {...t,name:m?.name||t.name||"選手",num:m?.num||t.num||""}; }).sort((a,b)=>String(a.num).localeCompare(String(b.num),"ja",{numeric:true}));
+        summary.textContent=`終了試合 ${finished.length}試合から集計`;
+        renderPlayerStatsDashboard();
+      } catch(e){ console.error("STATS_DASHBOARD_ERROR",e); summary.textContent="読込エラー"; box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-red-600">成績を読み込めませんでした。</div>'; }
+    }
+
+    function renderPlayerStatsDashboard(){
+      const box=document.getElementById("player-stats-list"); if(!box)return;
+      if(!seasonPlayerStats.length){ box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">集計済みの試合成績はまだありません。試合終了後にここへ反映されます。</div>'; return; }
+      if(statsDisplayMode==="batting") {
+        box.innerHTML=seasonPlayerStats.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">${t.games}試合</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">打率</div><div class="text-xl font-black text-team-red">${formatAvg(t.h,t.ab)}</div></div></div><div class="overflow-x-auto"><table class="min-w-[620px] w-full text-center text-[10px]"><thead class="bg-gray-50 text-gray-400"><tr><th class="p-2">打席</th><th>打数</th><th>安打</th><th>二塁打</th><th>三塁打</th><th>本塁打</th><th>打点</th><th>四球</th><th>死球</th><th>三振</th><th>犠打</th><th>犠飛</th><th>盗塁</th></tr></thead><tbody><tr class="font-bold"><td class="p-2">${t.pa}</td><td>${t.ab}</td><td>${t.h}</td><td>${t.doubles}</td><td>${t.triples}</td><td>${t.hr}</td><td>${t.rbi}</td><td>${t.bb}</td><td>${t.hbp}</td><td>${t.k}</td><td>${t.sh}</td><td>${t.sf}</td><td>${t.sb}</td></tr></tbody></table></div></div>`).join("");
+      } else {
+        const pitchers=seasonPlayerStats.filter(t=>t.pOuts||t.pH||t.pHR||t.pBB||t.pHBP||t.pK||t.pRuns);
+        box.innerHTML=pitchers.length?pitchers.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">投手成績</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">投球回</div><div class="text-xl font-black text-team-red">${formatIP(t.pOuts)}</div></div></div><div class="grid grid-cols-6 text-center text-[10px]"><div class="p-2"><div class="text-gray-400">被安打</div><b>${t.pH}</b></div><div class="p-2"><div class="text-gray-400">被本塁打</div><b>${t.pHR}</b></div><div class="p-2"><div class="text-gray-400">四球</div><b>${t.pBB}</b></div><div class="p-2"><div class="text-gray-400">死球</div><b>${t.pHBP}</b></div><div class="p-2"><div class="text-gray-400">奪三振</div><b>${t.pK}</b></div><div class="p-2"><div class="text-gray-400">失点</div><b>${t.pRuns}</b></div></div></div>`).join(""):'<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">投手成績はまだありません。</div>';
+      }
+    }
+
+    function setStatsMainView(view){
+      const stats=document.getElementById("player-stats-panel"), live=document.getElementById("live-entry-panel"), sb=document.getElementById("stats-view-button"), lb=document.getElementById("live-view-button");
+      const isStats=view==="stats"; stats?.classList.toggle("hidden",!isStats); live?.classList.toggle("hidden",isStats);
+      sb?.classList.toggle("bg-white",isStats); sb?.classList.toggle("text-team-red",isStats); sb?.classList.toggle("shadow-sm",isStats); sb?.classList.toggle("text-gray-500",!isStats);
+      lb?.classList.toggle("bg-white",!isStats); lb?.classList.toggle("text-team-red",!isStats); lb?.classList.toggle("shadow-sm",!isStats); lb?.classList.toggle("text-gray-500",isStats);
+      if(isStats) loadPlayerStatsDashboard();
+    }
+    document.getElementById("stats-view-button")?.addEventListener("click",()=>setStatsMainView("stats"));
+    document.getElementById("live-view-button")?.addEventListener("click",()=>setStatsMainView("live"));
+    document.getElementById("refresh-stats-button")?.addEventListener("click",loadPlayerStatsDashboard);
+    document.getElementById("batting-stats-button")?.addEventListener("click",()=>{statsDisplayMode="batting"; document.getElementById("batting-stats-button").className="bg-team-red text-white rounded-lg py-2 text-xs font-black"; document.getElementById("pitching-stats-button").className="bg-gray-100 text-gray-500 rounded-lg py-2 text-xs font-black"; renderPlayerStatsDashboard();});
+    document.getElementById("pitching-stats-button")?.addEventListener("click",()=>{statsDisplayMode="pitching"; document.getElementById("pitching-stats-button").className="bg-team-red text-white rounded-lg py-2 text-xs font-black"; document.getElementById("batting-stats-button").className="bg-gray-100 text-gray-500 rounded-lg py-2 text-xs font-black"; renderPlayerStatsDashboard();});
+
     function switchTab(tabId) {
       document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
       document.querySelectorAll(".nav-btn").forEach(el => { el.classList.remove("text-team-red"); el.classList.add("text-gray-400"); });
       document.getElementById("tab-" + tabId)?.classList.remove("hidden");
       const nav = document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
       if (nav) { nav.classList.remove("text-gray-400"); nav.classList.add("text-team-red"); }
+      if (tabId === "stats") setStatsMainView("stats");
     }
     document.querySelectorAll(".tab-link").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 
