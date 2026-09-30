@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.20</title>
+  <title>Okayama Girls v8.0 Diamond Score</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -201,6 +201,40 @@
       .og-header-logo-wrap { width:165px; max-width:50vw; height:44px; }
       .header-account-pill { padding-left:.55rem !important; padding-right:.55rem !important; font-size:9px !important; }
     }
+
+  
+    /* v8.0: diamond-based LIVE scoring prototype */
+    #live-game-panel.live-fullscreen .live-lower { overflow-y:auto !important; -webkit-overflow-scrolling:touch; padding-bottom:.3rem; }
+    .diamond-score-wrap{position:relative;background:linear-gradient(180deg,#0d1a2b 0%,#0b1422 100%);border-radius:18px;padding:8px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+    .diamond-field{position:relative;height:390px;border-radius:22px;overflow:hidden;background:radial-gradient(ellipse at 50% 58%,#b98a55 0 27%,transparent 27.5%),linear-gradient(180deg,#2f7a35 0%,#24632f 56%,#1c5127 100%);box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
+    .diamond-field:before{content:"";position:absolute;left:18%;right:18%;bottom:12%;height:52%;background:#b98a55;clip-path:polygon(50% 0,100% 66%,50% 100%,0 66%);opacity:.95}
+    .diamond-field:after{content:"";position:absolute;left:21%;right:21%;bottom:15%;height:47%;background:#2d6c32;clip-path:polygon(50% 7%,92% 66%,50% 94%,8% 66%);opacity:1}
+    .outfield-lines{position:absolute;inset:0;pointer-events:none}
+    .outfield-lines line,.outfield-lines path{stroke:rgba(255,255,255,.8);stroke-width:1.2;stroke-dasharray:5 5;fill:none}
+    .position-zone{position:absolute;z-index:7;min-width:72px;padding:7px 9px;border-radius:15px;border:1px solid rgba(255,255,255,.55);background:linear-gradient(180deg,#182238,#0f1728);color:#fff;text-align:center;font-size:10px;font-weight:900;line-height:1.05;box-shadow:0 5px 12px rgba(0,0,0,.28);transition:.15s}
+    .position-zone small{display:block;font-size:8px;font-weight:700;margin-top:3px;opacity:.9}
+    .position-zone.selected{background:linear-gradient(180deg,#d5283f,#b5122d);border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.45),0 0 20px 7px rgba(255,42,68,.9),0 8px 18px rgba(0,0,0,.35);transform:scale(1.05)}
+    .pos-lf{left:7%;top:31%}.pos-lc{left:26%;top:19%}.pos-cf{left:50%;top:9%;transform:translateX(-50%)}.pos-rc{right:26%;top:19%}.pos-rf{right:7%;top:31%}
+    .pos-ss{left:29%;top:48%}.pos-2b{right:29%;top:48%}.pos-3b{left:15%;top:65%}.pos-p{left:50%;top:62%;transform:translateX(-50%)}.pos-1b{right:15%;top:65%}.pos-c{left:50%;bottom:3%;transform:translateX(-50%)}
+    .base-marker{position:absolute;z-index:6;width:24px;height:24px;background:#fff;transform:rotate(45deg);border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+    .base-1{right:24%;bottom:24%}.base-2{left:50%;top:45%;transform:translateX(-50%) rotate(45deg)}.base-3{left:24%;bottom:24%}
+    .runner-helmet{position:absolute;z-index:10;width:34px;height:26px;border-radius:17px 17px 8px 8px;box-shadow:0 0 0 2px #fff,0 4px 10px rgba(0,0,0,.35)}
+    .runner-helmet:after{content:"";position:absolute;right:-8px;bottom:4px;width:14px;height:6px;border-radius:5px;background:inherit}
+    .runner-helmet.team{background:#d41431}.runner-helmet.opp{background:#1670d8}
+    .runner-1{right:22%;bottom:30%}.runner-2{left:50%;top:36%;transform:translateX(-50%)}.runner-3{left:22%;bottom:30%}
+    .field-undo{position:absolute;left:10px;bottom:10px;z-index:12;border:1px solid rgba(255,255,255,.28);background:rgba(8,15,28,.9);padding:9px 12px;border-radius:12px;font-size:10px;font-weight:900}
+    .no-ball-trigger{position:absolute;right:10px;bottom:10px;z-index:12;border:1px solid rgba(96,165,250,.8);background:rgba(9,44,84,.95);padding:9px 12px;border-radius:12px;font-size:10px;font-weight:900}
+    .no-ball-menu{position:absolute;right:8px;bottom:52px;z-index:20;width:158px;background:#fff;border-radius:16px;padding:8px;box-shadow:0 18px 40px rgba(0,0,0,.42);color:#111827}
+    .no-ball-menu-title{font-size:9px;font-weight:900;color:#dc2626;margin-bottom:6px}
+    .no-ball-action{width:100%;display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:10px;margin-top:5px;font-size:11px;font-weight:900;text-align:left}.no-ball-action i{width:18px;text-align:center}
+    .nba-strike{background:#f8e5e8;color:#991b1b}.nba-walk{background:#fff5d8;color:#92400e}.nba-hbp{background:#e9f2ff;color:#1d4ed8}.nba-ibb{background:#f3e8ff;color:#6b21a8}.nba-drop{background:#e8f8ee;color:#166534}
+    .batter-destination{background:#fff;color:#111827;border-radius:18px;padding:12px;margin-top:8px}
+    .batter-destination .dest-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:8px}
+    .dest-btn{border:1px solid #e5e7eb;border-radius:12px;padding:9px 3px;font-size:10px;font-weight:900;background:#fff;line-height:1.1}.dest-btn.selected{border-color:#dc1437;background:#fff0f2;color:#c8102e;box-shadow:0 0 0 1px #dc1437 inset}
+    .runner-advance{margin-top:10px;border-top:1px solid #eee;padding-top:9px}.runner-row{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;margin-top:6px}.runner-row label{font-size:9px;font-weight:900}.runner-row select{border:1px solid #e5e7eb;border-radius:10px;padding:8px;font-size:10px;background:#fff}
+    .draft-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:8px;margin-top:10px}.draft-actions button{padding:11px;border-radius:12px;font-size:11px;font-weight:900}.draft-cancel{background:#273143;color:white}.draft-commit{background:#d51232;color:white}
+    .draft-hint{text-align:center;font-size:9px;color:#cbd5e1;margin:6px 0 2px}.selected-location-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;background:rgba(255,255,255,.08);padding:4px 8px;font-size:9px;color:#e5e7eb}
+    @media(max-width:390px){.diamond-field{height:345px}.position-zone{min-width:62px;padding:6px;font-size:9px}.position-zone small{font-size:7px}.no-ball-menu{width:145px}.batter-destination .dest-grid{gap:4px}.dest-btn{font-size:9px}}
 
   </style>
 </head>
@@ -404,20 +438,10 @@
             </div>
 
             <div class="count-panel-large">
-              <div class="count-top">
-                <div class="count-board">
-                  <div class="count-row"><div class="count-label text-green-400">B</div><div id="ball-lamps" class="count-lamps"></div></div>
-                  <div class="count-row"><div class="count-label text-yellow-300">S</div><div id="strike-lamps" class="count-lamps"></div></div>
-                  <div class="count-row"><div class="count-label text-red-400">O</div><div id="out-lamps" class="count-lamps"></div></div>
-                </div>
-                <div class="score-inline">
-                  <div id="inline-score-label" class="score-inline-label">OKAYAMA 得点</div>
-                  <div class="score-inline-controls">
-                    <button id="inline-score-down" type="button">−</button>
-                    <b id="inline-score-value">0</b>
-                    <button id="inline-score-up" type="button">＋</button>
-                  </div>
-                </div>
+              <div class="count-board">
+                <div class="count-row"><div class="count-label text-green-400">B</div><div id="ball-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-yellow-300">S</div><div id="strike-lamps" class="count-lamps"></div></div>
+                <div class="count-row"><div class="count-label text-red-400">O</div><div id="out-lamps" class="count-lamps"></div></div>
               </div>
               <div class="count-controls">
                 <div class="flex"><button data-count="ball" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="ball" data-delta="1" class="count-btn flex-1 bg-green-600 rounded-lg">＋</button></div>
@@ -425,20 +449,56 @@
                 <div class="flex"><button data-count="out" data-delta="-1" class="count-btn flex-1 bg-white/10 rounded-lg">−</button><button data-count="out" data-delta="1" class="count-btn flex-1 bg-red-600 rounded-lg">＋</button></div>
               </div>
               <span id="ball-count" class="hidden">0</span><span id="strike-count" class="hidden">0</span><span id="out-count" class="hidden">0</span>
+              <div class="hidden" aria-hidden="true"><span id="inline-score-label"></span><button id="inline-score-down"></button><b id="inline-score-value">0</b><button id="inline-score-up"></button></div>
             </div>
 
-            <div>
-              <div class="flex items-center justify-between mb-2">
-                <div id="result-title" class="text-xs font-black">打撃結果</div>
-                <div class="flex items-center gap-2 bg-white/10 rounded-xl px-2 py-1">
-                  <span id="play-run-label" class="text-[10px] font-bold text-gray-300">打点</span>
-                  <button id="play-run-down" type="button" class="w-7 h-7 rounded-lg bg-white/10 font-black">−</button>
-                  <b id="play-run-count" class="w-4 text-center">0</b>
-                  <button id="play-run-up" type="button" class="w-7 h-7 rounded-lg bg-white/10 font-black">＋</button>
+            <div class="diamond-score-wrap">
+              <div class="flex items-center justify-between px-1 pb-2">
+                <div class="text-xs font-black">打球位置をタップ</div>
+                <div id="selected-location-label" class="selected-location-pill"><i class="fa-solid fa-location-dot"></i><span>未選択</span></div>
+              </div>
+              <div id="diamond-field" class="diamond-field">
+                <svg class="outfield-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M6 48 L50 78 L94 48" />
+                  <line x1="25" y1="18" x2="39" y2="50"/><line x1="38" y1="9" x2="45" y2="47"/><line x1="62" y1="9" x2="55" y2="47"/><line x1="75" y1="18" x2="61" y2="50"/>
+                </svg>
+                <button class="position-zone pos-lf" data-field-pos="左翼" data-field-label="左翼（レフト）">左翼<small>（レフト）</small></button>
+                <button class="position-zone pos-lc" data-field-pos="左中間" data-field-label="左中間">左中間</button>
+                <button class="position-zone pos-cf" data-field-pos="中堅" data-field-label="中堅（センター）">中堅<small>（センター）</small></button>
+                <button class="position-zone pos-rc" data-field-pos="右中間" data-field-label="右中間">右中間</button>
+                <button class="position-zone pos-rf" data-field-pos="右翼" data-field-label="右翼（ライト）">右翼<small>（ライト）</small></button>
+                <button class="position-zone pos-ss" data-field-pos="遊撃" data-field-label="遊撃（ショート）">遊撃<small>（ショート）</small></button>
+                <button class="position-zone pos-2b" data-field-pos="二塁" data-field-label="二塁（セカンド）">二塁<small>（セカンド）</small></button>
+                <button class="position-zone pos-3b" data-field-pos="三塁" data-field-label="三塁（サード）">三塁<small>（サード）</small></button>
+                <button class="position-zone pos-p" data-field-pos="投手" data-field-label="投手（ピッチャー）">投手<small>（ピッチャー）</small></button>
+                <button class="position-zone pos-1b" data-field-pos="一塁" data-field-label="一塁（ファースト）">一塁<small>（ファースト）</small></button>
+                <button class="position-zone pos-c" data-field-pos="捕手" data-field-label="捕手（キャッチャー）">捕手<small>（キャッチャー）</small></button>
+                <span class="base-marker base-1"></span><span class="base-marker base-2"></span><span class="base-marker base-3"></span>
+                <span id="runner-base-1" class="runner-helmet runner-1 hidden"></span><span id="runner-base-2" class="runner-helmet runner-2 hidden"></span><span id="runner-base-3" class="runner-helmet runner-3 hidden"></span>
+                <button id="field-undo-button" type="button" class="field-undo"><i class="fa-solid fa-rotate-left mr-1"></i>選択を1つ戻す</button>
+                <button id="no-ball-trigger" type="button" class="no-ball-trigger"><i class="fa-solid fa-baseball mr-1"></i>打球なし</button>
+                <div id="no-ball-menu" class="no-ball-menu hidden">
+                  <div class="no-ball-menu-title">打球なしアクション</div>
+                  <button class="no-ball-action nba-strike" data-no-ball="三振"><i class="fa-solid fa-xmark"></i>三振</button>
+                  <button class="no-ball-action nba-walk" data-no-ball="四球"><i class="fa-solid fa-person-walking"></i>四球</button>
+                  <button class="no-ball-action nba-hbp" data-no-ball="死球"><i class="fa-solid fa-circle"></i>死球</button>
+                  <button class="no-ball-action nba-ibb" data-no-ball="敬遠"><i class="fa-solid fa-hand"></i>敬遠</button>
+                  <button class="no-ball-action nba-drop" data-no-ball="振り逃げ"><i class="fa-solid fa-person-running"></i>振り逃げ</button>
                 </div>
               </div>
-              <div id="result-buttons" class="grid grid-cols-3 gap-2"></div>
+              <div class="draft-hint">ポジションをタップして打球位置を選択／右下「打球なし」で三振・四死球などを選択</div>
             </div>
+
+            <div class="batter-destination">
+              <div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-team-red text-white flex items-center justify-center font-black text-xs">1</span><div><div class="text-sm font-black">打者の出塁先を指定</div><div class="text-[10px] text-gray-500">この打球の結果として、打者が到達した塁を選択</div></div></div>
+              <div class="dest-grid">
+                <button class="dest-btn" data-dest="out">アウト</button><button class="dest-btn" data-dest="1">1塁<br><span class="text-[8px]">シングル</span></button><button class="dest-btn" data-dest="2">2塁<br><span class="text-[8px]">ツーベース</span></button><button class="dest-btn" data-dest="3">3塁<br><span class="text-[8px]">スリーベース</span></button><button class="dest-btn" data-dest="home">本塁<br><span class="text-[8px]">ホームラン</span></button>
+              </div>
+              <div id="runner-advance-panel" class="runner-advance hidden"><div class="text-[11px] font-black">走者進塁 <span class="text-[9px] text-gray-400 font-normal">既存の走者の進塁先を指定</span></div><div id="runner-advance-rows"></div></div>
+              <div class="draft-actions"><button id="draft-cancel-button" class="draft-cancel" type="button">キャンセル</button><button id="draft-commit-button" class="draft-commit" type="button">この結果を登録する</button></div>
+            </div>
+
+            <div class="hidden" aria-hidden="true"><div id="result-title"></div><span id="play-run-label"></span><button id="play-run-down"></button><b id="play-run-count">0</b><button id="play-run-up"></button><div id="result-buttons"></div></div>
 
             <div class="play-log-box bg-black/20 rounded-2xl p-3">
               <div class="flex justify-between items-center mb-2"><b class="text-xs">プレイログ</b><span class="text-[10px] text-gray-400">新しい順</span></div>
@@ -596,7 +656,7 @@
     let unsubscribeAttendance = null;
     let liveGameId = null;
     let currentLiveSide = "";
-    let liveState = {inning:1, half:"表", teamScore:0, opponentScore:0, inningScores:{team:{},opponent:{}}, ball:0, strike:0, out:0, pitcherId:"", batterId:"", logs:[], status:"in_progress"};
+    let liveState = {inning:1, half:"表", teamScore:0, opponentScore:0, inningScores:{team:{},opponent:{}}, ball:0, strike:0, out:0, pitcherId:"", batterId:"", bases:{first:null,second:null,third:null}, logs:[], status:"in_progress"};
     let pendingPlayRuns = 0;
 
     function showError(message) {
@@ -1221,7 +1281,7 @@
       const finishedInning=String(liveState.inning);
       if (liveState.inningScores[finishedBucket][finishedInning] == null) liveState.inningScores[finishedBucket][finishedInning]=0;
       recalcTotalsFromInnings();
-      liveState.ball=0; liveState.strike=0; liveState.out=0;
+      liveState.ball=0; liveState.strike=0; liveState.out=0; liveState.bases={first:null,second:null,third:null};
       if(liveState.half==="表") liveState.half="裏";
       else { liveState.half="表"; liveState.inning+=1; }
       pendingPlayRuns=0;
@@ -1260,15 +1320,110 @@
       renderLamps("out-lamps",liveState.out,2,"out");
       document.getElementById("live-pitcher").value=liveState.pitcherId || "";
       document.getElementById("live-batter").value=liveState.batterId || "";
+      renderBaseRunners();
       const log=document.getElementById("play-log");
       log.innerHTML=liveState.logs?.length ? [...liveState.logs].reverse().map(x =>
-        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b> <span class="text-gray-400">${escapeHtml(x.mode || "")}</span>　${escapeHtml(x.playerName || x.batterName || x.pitcherName || "選手未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span>${(x.rbi||0)>0?` <span class="text-red-300 font-bold">打点${x.rbi}</span>`:""}${(x.runsAllowed||0)>0?` <span class="text-blue-300 font-bold">失点${x.runsAllowed}</span>`:""}</div>`).join("")
+        `<div class="bg-white/10 rounded-lg p-2"><b>${escapeHtml(x.inning+ x.half)}</b> <span class="text-gray-400">${escapeHtml(x.mode || "")}</span>　${escapeHtml(x.playerName || x.batterName || x.pitcherName || "選手未選択")}　<span class="text-yellow-300 font-bold">${escapeHtml(x.result)}</span>${x.location?` <span class="text-gray-300">${escapeHtml(x.location)}</span>`:""}${(x.rbi||0)>0?` <span class="text-red-300 font-bold">打点${x.rbi}</span>`:""}${(x.runsAllowed||0)>0?` <span class="text-blue-300 font-bold">失点${x.runsAllowed}</span>`:""}</div>`).join("")
         : '<div class="text-gray-400">まだ記録がありません。</div>';
     }
 
     const results=["単打","二塁打","三塁打","本塁打","四球","死球","三振","凡打","犠打","犠飛","失策","盗塁"];
     document.getElementById("result-buttons").innerHTML=results.map(r =>
       `<button type="button" data-result="${r}" class="result-btn bg-white/10 hover:bg-team-red rounded-xl py-2 text-xs font-bold">${r}</button>`).join("");
+
+
+    // v8.0 diamond scoring draft state
+    let liveDraft = { location:"", locationLabel:"", noBall:"", batterDest:"", history:[] };
+
+    function baseKeyFromNumber(n){ return n===1?"first":n===2?"second":n===3?"third":""; }
+    function normalizeBases(){ liveState.bases = liveState.bases || {first:null,second:null,third:null}; return liveState.bases; }
+    function runnerColorClass(){ return currentHalfIsOffense() ? "team" : "opp"; }
+    function renderBaseRunners(){
+      const b=normalizeBases();
+      [["runner-base-1","first"],["runner-base-2","second"],["runner-base-3","third"]].forEach(([id,key])=>{
+        const el=document.getElementById(id); if(!el) return;
+        el.classList.toggle("hidden", !b[key]);
+        el.classList.remove("team","opp"); if(b[key]) el.classList.add(runnerColorClass());
+      });
+      renderRunnerAdvanceRows();
+    }
+    function snapshotDraft(){ liveDraft.history.push(JSON.stringify({location:liveDraft.location,locationLabel:liveDraft.locationLabel,noBall:liveDraft.noBall,batterDest:liveDraft.batterDest})); if(liveDraft.history.length>12) liveDraft.history.shift(); }
+    function resetDraft(){ liveDraft={location:"",locationLabel:"",noBall:"",batterDest:"",history:[]}; document.querySelectorAll(".position-zone.selected,.dest-btn.selected").forEach(x=>x.classList.remove("selected")); document.getElementById("selected-location-label").querySelector("span").textContent="未選択"; document.getElementById("no-ball-menu").classList.add("hidden"); renderRunnerAdvanceRows(); }
+    function restoreDraftOne(){
+      const raw=liveDraft.history.pop(); if(!raw) return;
+      const prev=JSON.parse(raw); liveDraft.location=prev.location; liveDraft.locationLabel=prev.locationLabel; liveDraft.noBall=prev.noBall; liveDraft.batterDest=prev.batterDest;
+      document.querySelectorAll(".position-zone").forEach(x=>x.classList.toggle("selected",x.dataset.fieldPos===liveDraft.location));
+      document.querySelectorAll(".dest-btn").forEach(x=>x.classList.toggle("selected",x.dataset.dest===liveDraft.batterDest));
+      document.getElementById("selected-location-label").querySelector("span").textContent=liveDraft.noBall||liveDraft.locationLabel||"未選択";
+    }
+    function renderRunnerAdvanceRows(){
+      const panel=document.getElementById("runner-advance-panel"), wrap=document.getElementById("runner-advance-rows"); if(!panel||!wrap) return;
+      const b=normalizeBases(); const items=[["一塁走者","first",1],["二塁走者","second",2],["三塁走者","third",3]].filter(x=>b[x[1]]);
+      panel.classList.toggle("hidden",items.length===0);
+      wrap.innerHTML=items.map(([label,key,num])=>`<div class="runner-row"><label>${label}<br><span class="text-gray-400">${escapeHtml(b[key]?.name||"")}</span></label><select data-runner-key="${key}"><option value="stay">そのまま</option>${num<2?'<option value="second">2塁</option>':''}${num<3?'<option value="third">3塁</option>':''}<option value="home">生還</option><option value="out">アウト</option></select></div>`).join("");
+    }
+    function draftResultName(){
+      if(liveDraft.noBall) return liveDraft.noBall;
+      const map={out:"凡打",1:"単打",2:"二塁打",3:"三塁打",home:"本塁打"}; return map[liveDraft.batterDest]||"";
+    }
+    function applyRunnerAdvances(resultName){
+      const old=normalizeBases(); const next={first:null,second:null,third:null}; let runs=0, runnerOuts=0;
+      document.querySelectorAll("#runner-advance-rows select[data-runner-key]").forEach(sel=>{
+        const runner=old[sel.dataset.runnerKey]; if(!runner) return;
+        const v=sel.value; if(v==="home") runs++; else if(v==="out") runnerOuts++; else if(v==="stay") next[sel.dataset.runnerKey]=runner; else next[v]=runner;
+      });
+      const isOffense=currentHalfIsOffense();
+      const batterId=document.getElementById("live-batter").value; const batter=currentMembers.find(m=>m.id===batterId);
+      const batterRunner={id:batterId||"opp",name:isOffense?(batter?.name||"打者"):("相手打者")};
+      if(liveDraft.batterDest==="1") next.first=batterRunner;
+      if(liveDraft.batterDest==="2") next.second=batterRunner;
+      if(liveDraft.batterDest==="3") next.third=batterRunner;
+      if(liveDraft.batterDest==="home") runs++;
+      if(["四球","死球","敬遠","振り逃げ"].includes(resultName) && !liveDraft.batterDest){ if(!next.first) next.first=batterRunner; }
+      liveState.bases=next;
+      return {runs,runnerOuts};
+    }
+    function autoRbiFor(resultName,runs){
+      if(!currentHalfIsOffense()) return 0;
+      if(["三振","振り逃げ"].includes(resultName)) return 0;
+      return runs;
+    }
+    function addOutsAuto(count,preSnapshot){
+      for(let i=0;i<count;i++){
+        if(liveState.out>=2){ advanceHalfAfterThreeOuts(preSnapshot); return true; }
+        liveState.out++;
+      }
+      return false;
+    }
+    function commitDiamondPlay(){
+      const isOffense=currentHalfIsOffense();
+      const batterId=document.getElementById("live-batter").value, pitcherId=document.getElementById("live-pitcher").value;
+      const batter=currentMembers.find(m=>m.id===batterId), pitcher=currentMembers.find(m=>m.id===pitcherId);
+      if(isOffense && !batterId) return alert("現在の打者を選択してください。");
+      if(!isOffense && !pitcherId) return alert("現在の投手を選択してください。");
+      if(!liveDraft.noBall && !liveDraft.location) return alert("打球位置を選択してください。\n打球がない場合は右下の「打球なし」を使用してください。");
+      if(!liveDraft.noBall && !liveDraft.batterDest) return alert("打者の出塁先を選択してください。");
+      if(liveDraft.noBall && !liveDraft.batterDest && !["三振"].includes(liveDraft.noBall)) liveDraft.batterDest="1";
+      if(liveDraft.noBall==="三振") liveDraft.batterDest="out";
+      const result=draftResultName(); const pre=cloneLiveState(liveState);
+      const adv=applyRunnerAdvances(result); const batterOut=liveDraft.batterDest==="out" ? 1:0; const totalOuts=batterOut+adv.runnerOuts;
+      const runs=adv.runs; const rbi=autoRbiFor(result,runs);
+      if(runs>0) changeCurrentInningScore(currentScoreBucket(),runs);
+      liveState.pitcherId=pitcherId||""; liveState.batterId=batterId||""; liveState.logs=liveState.logs||[];
+      const detail = liveDraft.noBall ? liveDraft.noBall : `${liveDraft.locationLabel||liveDraft.location} ${result}`;
+      liveState.logs.push({id:(crypto.randomUUID?crypto.randomUUID():Date.now()+"_"+Math.random().toString(36).slice(2)),inning:liveState.inning,half:liveState.half,mode:isOffense?"攻撃":"守備",result,location:liveDraft.locationLabel||"",detail,playerId:isOffense?batterId:pitcherId,playerName:isOffense?(batter?.name||"打者未選択"):(pitcher?.name||"投手未選択"),batterId:isOffense?batterId:"",pitcherId:!isOffense?pitcherId:"",rbi:isOffense?rbi:0,runsAllowed:!isOffense?runs:0,at:new Date().toISOString()});
+      liveState.ball=0; liveState.strike=0;
+      if(totalOuts>0 && addOutsAuto(totalOuts,pre)){ resetDraft(); return; }
+      resetDraft(); updateLiveUI(); markLiveChanged();
+    }
+
+    document.querySelectorAll(".position-zone").forEach(btn=>btn.addEventListener("click",()=>{ snapshotDraft(); liveDraft.noBall=""; liveDraft.location=btn.dataset.fieldPos; liveDraft.locationLabel=btn.dataset.fieldLabel; document.querySelectorAll(".position-zone").forEach(x=>x.classList.remove("selected")); btn.classList.add("selected"); document.getElementById("selected-location-label").querySelector("span").textContent=liveDraft.locationLabel; document.getElementById("no-ball-menu").classList.add("hidden"); }));
+    document.querySelectorAll(".dest-btn").forEach(btn=>btn.addEventListener("click",()=>{ snapshotDraft(); liveDraft.batterDest=btn.dataset.dest; document.querySelectorAll(".dest-btn").forEach(x=>x.classList.remove("selected")); btn.classList.add("selected"); }));
+    document.getElementById("no-ball-trigger").addEventListener("click",()=>document.getElementById("no-ball-menu").classList.toggle("hidden"));
+    document.querySelectorAll(".no-ball-action").forEach(btn=>btn.addEventListener("click",()=>{ snapshotDraft(); liveDraft.location=""; liveDraft.locationLabel=""; liveDraft.noBall=btn.dataset.noBall; document.querySelectorAll(".position-zone").forEach(x=>x.classList.remove("selected")); document.getElementById("selected-location-label").querySelector("span").textContent=liveDraft.noBall; document.getElementById("no-ball-menu").classList.add("hidden"); if(["四球","死球","敬遠","振り逃げ"].includes(liveDraft.noBall)){ liveDraft.batterDest="1"; document.querySelectorAll(".dest-btn").forEach(x=>x.classList.toggle("selected",x.dataset.dest==="1")); } else if(liveDraft.noBall==="三振"){ liveDraft.batterDest="out"; document.querySelectorAll(".dest-btn").forEach(x=>x.classList.toggle("selected",x.dataset.dest==="out")); } }));
+    document.getElementById("field-undo-button").addEventListener("click",restoreDraftOne);
+    document.getElementById("draft-cancel-button").addEventListener("click",resetDraft);
+    document.getElementById("draft-commit-button").addEventListener("click",commitDiamondPlay);
 
     document.getElementById("live-start-button").addEventListener("click", async () => {
       const eventId=document.getElementById("live-event-select").value;
@@ -1284,7 +1439,7 @@
             currentLiveSide = await chooseLiveSide({allowCancel:true});
             if (!currentLiveSide) return;
           }
-          liveState={inning:d.inning||1,half:d.half||"表",teamScore:d.teamScore ?? d.score ?? 0,opponentScore:d.opponentScore ?? 0,inningScores:normalizeInningScores(d.inningScores),ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",logs:d.logs||[],status:d.status||"in_progress"};
+          liveState={inning:d.inning||1,half:d.half||"表",teamScore:d.teamScore ?? d.score ?? 0,opponentScore:d.opponentScore ?? 0,inningScores:normalizeInningScores(d.inningScores),ball:d.ball||0,strike:d.strike||0,out:d.out||0,pitcherId:d.pitcherId||"",batterId:d.batterId||"",bases:d.bases||{first:null,second:null,third:null},logs:d.logs||[],status:d.status||"in_progress"};
           if(!Object.keys(liveState.inningScores.team).length && !Object.keys(liveState.inningScores.opponent).length){ if(liveState.teamScore) liveState.inningScores.team["1"]=liveState.teamScore; if(liveState.opponentScore) liveState.inningScores.opponent["1"]=liveState.opponentScore; }
           recalcTotalsFromInnings();
           pendingPlayRuns=0;
@@ -1293,7 +1448,7 @@
         } else {
           currentLiveSide = await chooseLiveSide({allowCancel:true});
           if (!currentLiveSide) return;
-          liveState={inning:1,half:"表",teamScore:0,opponentScore:0,inningScores:{team:{},opponent:{}},ball:0,strike:0,out:0,pitcherId:"",batterId:"",logs:[],status:"in_progress"};
+          liveState={inning:1,half:"表",teamScore:0,opponentScore:0,inningScores:{team:{},opponent:{}},ball:0,strike:0,out:0,pitcherId:"",batterId:"",bases:{first:null,second:null,third:null},logs:[],status:"in_progress"};
           pendingPlayRuns=0;
           liveSavedSnapshot=null;
           document.getElementById("live-save-state").textContent="未保存";
@@ -1302,6 +1457,7 @@
         document.getElementById("live-start-panel").classList.add("hidden");
         document.getElementById("live-game-panel").classList.remove("hidden");
         setLiveFullscreen(true);
+        resetDraft();
         updateLiveUI();
       } catch(err) {
         console.error("LIVE_OPEN_ERROR",err);
