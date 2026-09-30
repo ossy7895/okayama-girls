@@ -1099,9 +1099,12 @@
     .stat-detail-row { display:grid; grid-template-columns:62px 1fr 28px; align-items:center; gap:9px; margin-top:12px; font-size:12px; font-weight:800; }
     .stat-detail-track { height:11px; background:#EEF0F4; border-radius:999px; overflow:hidden; }
     .stat-detail-bar { height:100%; min-width:0; border-radius:999px; background:#C8102E; transition:width .2s ease; }
-    .stat-summary-btn { width:100%; min-height:48px; border-radius:12px; background:#fff; transition:background .12s ease, transform .08s ease; }
-    .stat-summary-btn:active { background:#FFF1F3; transform:scale(.97); }
-    .stat-summary-btn .stat-hint { color:#C8102E; font-size:9px; font-weight:800; }
+    .stat-summary-btn { width:100%; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:.5rem; margin:0; border:0; border-radius:0; background:transparent; color:inherit; font:inherit; text-align:center; box-shadow:none; appearance:none; -webkit-appearance:none; transition:background .12s ease, transform .08s ease; }
+    .stat-summary-btn:hover { background:#FFF8F9; }
+    .stat-summary-btn:active { background:#FFF1F3; transform:scale(.985); }
+    .stat-summary-btn:focus-visible { outline:2px solid #C8102E; outline-offset:-2px; }
+    .stat-summary-btn > * { pointer-events:none; }
+    .stat-summary-btn .stat-hint { color:#C8102E; font-size:9px; font-weight:800; line-height:1.1; }
 
     .og-brand-logo { width:100%; height:auto; display:block; object-fit:contain; }
     .og-login-logo { max-width:350px; margin:0 auto; }
@@ -2652,7 +2655,37 @@
       }
       window.__sendLiveV98State = sendLiveV98State;
 
-      frame.addEventListener('load', () => setTimeout(sendLiveV98State, 0));
+      function refineEmbeddedLiveUI() {
+        try {
+          const doc = frame.contentDocument;
+          if (!doc) return;
+          if (!doc.getElementById('og-live-ui-cleanup-style')) {
+            const style = doc.createElement('style');
+            style.id = 'og-live-ui-cleanup-style';
+            style.textContent = `
+              #visualWrap{background:#061426;}
+              #canvas{background:#061426;}
+              #og-live-top-mask{position:absolute;left:0;top:0;width:941px;height:494px;background:linear-gradient(180deg,#061426 0%,#061426 72%,#07182a 100%);z-index:1;pointer-events:none;}
+            `;
+            doc.head.appendChild(style);
+          }
+          const canvas = doc.getElementById('canvas');
+          if (canvas && !doc.getElementById('og-live-top-mask')) {
+            const mask = doc.createElement('div');
+            mask.id = 'og-live-top-mask';
+            const ref = canvas.querySelector('.reference');
+            if (ref && ref.nextSibling) canvas.insertBefore(mask, ref.nextSibling);
+            else canvas.appendChild(mask);
+          }
+        } catch (err) {
+          console.warn('LIVE_V98_UI_CLEANUP_WARN', err);
+        }
+      }
+
+      frame.addEventListener('load', () => {
+        refineEmbeddedLiveUI();
+        setTimeout(sendLiveV98State, 0);
+      });
 
       window.addEventListener('message', e => {
         if (e.source !== frame.contentWindow) return;
