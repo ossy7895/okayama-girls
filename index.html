@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Okayama Girls v7.19 + LIVE v9.14 UI</title>
+  <title>Okayama Girls v7.19 + LIVE v9.15 UI</title>
   <!-- v6.4 LIVE first-start side selection -->
   <meta name="theme-color" content="#1A1A1A">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1107,7 +1107,7 @@
     .stat-summary-btn .stat-hint { color:#C8102E; font-size:9px; font-weight:800; line-height:1.1; }
 
 
-    /* v9.14 batting-order modal */
+    /* v9.15 batting-order modal */
     #live-order-modal { position:fixed; inset:0; z-index:340; display:flex; align-items:center; justify-content:center; padding:12px; background:rgba(2,10,22,.78); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
     #live-order-modal.hidden { display:none; }
     .order-modal-card { width:min(100%,760px); max-height:calc(100dvh - 24px); display:flex; flex-direction:column; overflow:hidden; background:#fff; color:#0b1f38; border-radius:22px; box-shadow:0 28px 90px rgba(0,0,0,.48); }
@@ -1143,6 +1143,43 @@
       .order-drop,.order-member{font-size:12px;min-height:42px;padding:7px;}
       .order-modal-title{font-size:19px;}
       .order-modal-sub{font-size:11px;}
+    }
+
+    /* v9.15 Individual stats: compact dashboard cards (C layout), tap to expand */
+    .player-stat-card { background:#fff; border:1px solid #E7EAF0; border-radius:18px; box-shadow:0 4px 14px rgba(16,24,39,.05); overflow:hidden; }
+    .player-stat-toggle { width:100%; display:grid; grid-template-columns:auto minmax(0,1fr) auto 24px; align-items:center; gap:10px; padding:14px; border:0; background:linear-gradient(135deg,#fff 55%,#FFF6F7); color:#101827; text-align:left; }
+    .player-stat-number { width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:999px; background:#0B1F38; color:#fff; font-size:12px; font-weight:950; }
+    .player-stat-name { min-width:0; font-size:14px; font-weight:950; }
+    .player-stat-games { margin-top:2px; font-size:10px; font-weight:750; color:#9CA3AF; }
+    .player-stat-avg { text-align:right; }
+    .player-stat-avg .label { font-size:9px; font-weight:800; color:#9CA3AF; }
+    .player-stat-avg .value { margin-top:1px; font-size:24px; line-height:1; font-weight:950; color:#C8102E; }
+    .player-stat-chevron { color:#94A3B8; transition:transform .18s ease; }
+    .player-stat-card.expanded .player-stat-chevron { transform:rotate(180deg); }
+    .player-stat-details { display:none; padding:0 12px 12px; }
+    .player-stat-card.expanded .player-stat-details { display:block; }
+    .player-stat-compact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+    .player-stat-pill { min-height:42px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 11px; border:0; border-radius:11px; background:#F7F8FA; color:#101827; text-align:left; }
+    .player-stat-pill .left { display:flex; align-items:center; gap:7px; min-width:0; }
+    .player-stat-pill i { width:16px; color:#C8102E; text-align:center; }
+    .player-stat-pill .label { font-size:10px; font-weight:800; color:#64748B; }
+    .player-stat-pill .value { font-size:14px; font-weight:950; }
+    .player-stat-pill.detail { cursor:pointer; }
+    .player-stat-pill.detail:active { background:#FFF1F3; }
+
+    /* v9.15 Order editor: touch-first tap assignment + mobile drag support */
+    .order-instruction { margin:10px 12px 0; padding:10px 12px; border-radius:13px; background:#FFF1F3; color:#C8102E; font-size:12px; font-weight:900; line-height:1.45; }
+    .order-instruction-sub { display:block; margin-top:3px; color:#64748B; font-size:10px; font-weight:750; }
+    .order-member { min-height:52px; touch-action:none; user-select:none; -webkit-user-select:none; cursor:pointer; }
+    .order-drop { min-height:52px; cursor:pointer; touch-action:none; }
+    .order-drop.tap-target { border-color:#C8102E; background:#FFF1F3; color:#C8102E; box-shadow:0 0 0 2px rgba(200,16,46,.10); }
+    .order-member.touch-dragging { opacity:.72; transform:scale(.98); box-shadow:0 10px 24px rgba(15,23,42,.18); }
+    .order-touch-ghost { position:fixed; z-index:9999; pointer-events:none; min-width:170px; max-width:52vw; padding:10px 12px; border-radius:12px; background:#fff; border:2px solid #C8102E; color:#0B1F38; font-size:12px; font-weight:900; box-shadow:0 12px 30px rgba(0,0,0,.24); transform:translate(-50%,-50%); }
+    @media(max-width:560px){
+      .order-modal-card{max-height:calc(100dvh - 12px);border-radius:18px;}
+      .order-modal-body{grid-template-columns:1fr 1fr;}
+      .order-member,.order-drop{min-height:50px;font-size:12px;}
+      .order-instruction{font-size:11px;margin:8px 8px 0;}
     }
 
     .og-brand-logo { width:100%; height:auto; display:block; object-fit:contain; }
@@ -1393,14 +1430,14 @@
 
         <div id="live-game-panel" class="hidden rounded-3xl overflow-hidden shadow-xl bg-[#101827] text-white">
           <div class="live-v98-topbar p-3 bg-team-red flex items-center justify-between">
-            <div><div class="live-v98-badge">LIVE SCORE / v9.14</div><div id="live-game-title" class="font-black text-base">試合</div></div>
+            <div><div class="live-v98-badge">LIVE SCORE / v9.15</div><div id="live-game-title" class="font-black text-base">試合</div></div>
             <div class="flex items-center gap-2">
               <button id="live-order-button" type="button" class="text-xs font-bold bg-white/15 px-3 py-2 rounded-lg border border-white/20">オーダー</button>
               <button id="live-close-button" type="button" class="text-xs font-bold bg-white/20 px-3 py-2 rounded-lg">スコアモード終了</button>
             </div>
           </div>
 
-          <iframe id="live-v98-frame" class="live-v98-frame" title="Okayama Girls LIVE v9.14" allow="fullscreen" referrerpolicy="no-referrer"></iframe>
+          <iframe id="live-v98-frame" class="live-v98-frame" title="Okayama Girls LIVE v9.15" allow="fullscreen" referrerpolicy="no-referrer"></iframe>
 
           <div class="live-body p-4 space-y-4">
             <!-- v7.5: inning/half and score controls are consolidated into the scoreboard cells.
@@ -1584,13 +1621,14 @@
         </div>
         <button id="live-order-close" class="order-close" type="button" aria-label="閉じる">×</button>
       </div>
+      <div class="order-instruction"><i class="fa-solid fa-hand-pointer mr-1"></i>① メンバーをタップ → ② 左の打順枠をタップで登録<span class="order-instruction-sub">☰ 長押しドラッグでも配置・並び替えできます</span></div>
       <div class="order-modal-body">
         <section class="order-pane">
-          <div class="order-pane-title">🏏 打順（ドラッグ＆ドロップ / タップで設定）</div>
+          <div class="order-pane-title">🏏 打順（タップで登録）</div>
           <div id="live-order-slots" class="order-slots"></div>
         </section>
         <section class="order-pane">
-          <div class="order-pane-title">👥 メンバー一覧</div>
+          <div class="order-pane-title">👥 メンバー一覧（タップして選択）</div>
           <div id="live-order-members" class="order-members"></div>
         </section>
       </div>
@@ -2124,6 +2162,13 @@
       updateAttendanceEventCard(eventId);
     }
 
+    const eventModal = document.getElementById("event-modal");
+    document.getElementById("cancel-event-button")?.addEventListener("click",()=>{
+      editingEventId=null;
+      eventModal?.classList.add("hidden");
+      eventModal?.classList.remove("flex");
+    });
+
     function openEventModal(id) {
       if (!["admin","member"].includes(currentRole)) return;
       editingEventId = id;
@@ -2407,7 +2452,7 @@
     }
 
 
-    // v9.14: batting order setup and automatic current-batter progression
+    // v9.15: batting order setup and automatic current-batter progression
     const orderModal=document.getElementById('live-order-modal');
     const orderSlots=document.getElementById('live-order-slots');
     const orderMembers=document.getElementById('live-order-members');
@@ -2435,26 +2480,75 @@
     }
     function renderOrderEditor(){
       const used=new Set(orderDraft.filter(Boolean));
-      orderSlots.innerHTML=orderDraft.map((id,i)=>`<div class="order-slot" data-order-slot="${i}"><div class="order-number">${i+1}番</div><div class="order-drop ${id?'filled':''}" data-order-drop="${i}"><span>${id?escapeHtml(memberLabelById(id)):'ここに設定'}</span>${id?'<button type="button" class="order-remove" data-order-remove="'+i+'" aria-label="削除">×</button>':''}</div></div>`).join('');
-      orderMembers.innerHTML=currentMembers.map(m=>{const id=String(m.id);const isUsed=used.has(id);return `<button type="button" draggable="${isUsed?'false':'true'}" class="order-member ${isUsed?'used':''} ${orderSelectedMember===id?'selected':''}" data-order-member="${escapeHtml(id)}"><span>${escapeHtml((m.num?`#${m.num} `:'')+(m.name||'名称未設定'))}</span><span class="order-handle">☰</span></button>`}).join('');
+      orderSlots.innerHTML=orderDraft.map((id,i)=>`<div class="order-slot" data-order-slot="${i}"><div class="order-number">${i+1}番</div><div class="order-drop ${id?'filled':''} ${orderSelectedMember?'tap-target':''}" data-order-drop="${i}" data-order-slot-member="${id?escapeHtml(String(id)):''}"><span>${id?escapeHtml(memberLabelById(id)):'＋ ここにメンバーを登録'}</span>${id?'<button type="button" class="order-remove" data-order-remove="'+i+'" aria-label="削除">×</button>':''}</div></div>`).join('');
+      orderMembers.innerHTML=currentMembers.map(m=>{const id=String(m.id);const isUsed=used.has(id);return `<button type="button" draggable="${isUsed?'false':'true'}" class="order-member ${isUsed?'used':''} ${orderSelectedMember===id?'selected':''}" data-order-member="${escapeHtml(id)}"><span>${escapeHtml((m.num?`#${m.num} `:'')+(m.name||'名称未設定'))}</span><span class="order-handle">${orderSelectedMember===id?'✓':'＋'}</span></button>`}).join('');
+
       orderMembers.querySelectorAll('[data-order-member]').forEach(btn=>{
         if(btn.classList.contains('used')) return;
-        btn.addEventListener('click',()=>{orderSelectedMember=btn.dataset.orderMember;renderOrderEditor();});
+        btn.addEventListener('click',e=>{e.preventDefault(); orderSelectedMember=btn.dataset.orderMember; renderOrderEditor();});
         btn.addEventListener('dragstart',e=>{orderDragMember=btn.dataset.orderMember;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',orderDragMember);});
+        enableTouchOrderDrag(btn,()=>btn.dataset.orderMember);
       });
       orderSlots.querySelectorAll('[data-order-drop]').forEach(drop=>{
-        drop.addEventListener('click',e=>{if(e.target.closest('[data-order-remove]'))return;if(orderSelectedMember){assignOrderMember(Number(drop.dataset.orderDrop),orderSelectedMember);}});
+        drop.addEventListener('click',e=>{
+          if(e.target.closest('[data-order-remove]'))return;
+          const slot=Number(drop.dataset.orderDrop);
+          if(orderSelectedMember){ assignOrderMember(slot,orderSelectedMember); return; }
+          const current=orderDraft[slot];
+          if(current){ orderSelectedMember=String(current); orderDraft[slot]=''; renderOrderEditor(); }
+        });
         drop.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';drop.classList.add('selected');});
         drop.addEventListener('dragleave',()=>drop.classList.remove('selected'));
         drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('selected');const id=e.dataTransfer.getData('text/plain')||orderDragMember;if(id)assignOrderMember(Number(drop.dataset.orderDrop),id);});
+        if(orderDraft[Number(drop.dataset.orderDrop)]) enableTouchOrderDrag(drop,()=>String(orderDraft[Number(drop.dataset.orderDrop)]),Number(drop.dataset.orderDrop));
       });
-      orderSlots.querySelectorAll('[data-order-remove]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();orderDraft[Number(btn.dataset.orderRemove)]='';renderOrderEditor();}));
+      orderSlots.querySelectorAll('[data-order-remove]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();orderDraft[Number(btn.dataset.orderRemove)]='';orderSelectedMember='';renderOrderEditor();}));
     }
+
+    function enableTouchOrderDrag(el,getMemberId,fromSlot=null){
+      let timer=null, dragging=false, pointerId=null, ghost=null, lastX=0,lastY=0;
+      const cleanup=()=>{ if(timer){clearTimeout(timer);timer=null;} dragging=false; pointerId=null; el.classList.remove('touch-dragging'); ghost?.remove(); ghost=null; document.querySelectorAll('.order-drop.selected').forEach(x=>x.classList.remove('selected')); };
+      el.addEventListener('pointerdown',e=>{
+        if(e.pointerType==='mouse') return;
+        pointerId=e.pointerId; lastX=e.clientX; lastY=e.clientY;
+        timer=setTimeout(()=>{
+          const id=getMemberId(); if(!id) return;
+          dragging=true; orderDragMember=id; el.classList.add('touch-dragging');
+          ghost=document.createElement('div'); ghost.className='order-touch-ghost'; ghost.textContent=memberLabelById(id); document.body.appendChild(ghost); ghost.style.left=lastX+'px'; ghost.style.top=lastY+'px';
+          try{el.setPointerCapture(pointerId);}catch(_e){}
+        },280);
+      },{passive:true});
+      el.addEventListener('pointermove',e=>{
+        if(pointerId!==e.pointerId) return; lastX=e.clientX; lastY=e.clientY;
+        if(!dragging){ if(timer && Math.hypot(e.movementX||0,e.movementY||0)>10){clearTimeout(timer);timer=null;} return; }
+        e.preventDefault();
+        if(ghost){ghost.style.left=lastX+'px';ghost.style.top=lastY+'px';}
+        document.querySelectorAll('.order-drop.selected').forEach(x=>x.classList.remove('selected'));
+        const target=document.elementFromPoint(lastX,lastY)?.closest?.('[data-order-drop]'); if(target) target.classList.add('selected');
+      },{passive:false});
+      const finish=e=>{
+        if(pointerId!==e.pointerId){cleanup();return;}
+        if(dragging){
+          e.preventDefault(); const target=document.elementFromPoint(lastX,lastY)?.closest?.('[data-order-drop]');
+          const id=orderDragMember;
+          if(target && id){
+            const to=Number(target.dataset.orderDrop);
+            if(fromSlot!==null && fromSlot!==to){ const swap=orderDraft[to]||''; orderDraft[to]=id; orderDraft[fromSlot]=swap; orderSelectedMember=''; orderDragMember=''; cleanup(); renderOrderEditor(); return; }
+            assignOrderMember(to,id); cleanup(); return;
+          }
+        }
+        cleanup();
+      };
+      el.addEventListener('pointerup',finish,{passive:false});
+      el.addEventListener('pointercancel',cleanup,{passive:true});
+    }
+
     function assignOrderMember(slot,id){
       orderDraft=orderDraft.map(x=>String(x)===String(id)?'':x);
       orderDraft[slot]=String(id);
       orderSelectedMember='';orderDragMember='';renderOrderEditor();
     }
+
     function openOrderModal(forceInitial=false){
       const existing=Array.isArray(liveState.battingOrder)?liveState.battingOrder.slice(0,9):[];
       orderDraft=Array.from({length:9},(_,i)=>existing[i]||'');
@@ -2715,6 +2809,7 @@
     // v7.8: finished-game player stats dashboard. Aggregates saved per-game stats, never increments totals in place.
     let statsDisplayMode = "batting";
     let seasonPlayerStats = [];
+    const expandedStatPlayers = new Set();
 
     function n(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
     function formatAvg(h,ab){ return ab ? (h/ab).toFixed(3).replace(/^0/,"") : ".000"; }
@@ -2777,10 +2872,34 @@
       const box=document.getElementById("player-stats-list"); if(!box)return;
       if(!seasonPlayerStats.length){ box.innerHTML='<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">集計済みの試合成績はまだありません。試合終了後にここへ反映されます。</div>'; return; }
       if(statsDisplayMode==="batting") {
-        box.innerHTML=seasonPlayerStats.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">${t.games}試合</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">打率</div><div class="text-xl font-black text-team-red">${formatAvg(t.h,t.ab)}</div></div></div><div class="grid grid-cols-4 sm:grid-cols-8 divide-x divide-y sm:divide-y-0 text-center text-[10px]"><div class="p-2"><div class="text-gray-400">打席</div><b>${t.pa}</b></div><div class="p-2"><div class="text-gray-400">打数</div><b>${t.ab}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="hits" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">安打</div><b>${t.h}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">打点</div><b>${t.rbi}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="walks" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">四死球</div><b>${t.bb+t.hbp}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">三振</div><b>${t.k}</b></div><button type="button" class="stat-summary-btn p-2" data-stat-detail="sac" data-member-id="${escapeHtml(t.memberId)}"><div class="text-gray-400">犠打</div><b>${t.sh+t.sf}</b><div class="stat-hint">詳細</div></button><div class="p-2"><div class="text-gray-400">盗塁</div><b>${t.sb}</b></div></div></div>`).join("");
+        box.innerHTML=seasonPlayerStats.map(t=>{
+          const expanded=expandedStatPlayers.has(String(t.memberId));
+          const mid=escapeHtml(t.memberId);
+          const item=(icon,label,value,detail='')=>`<button type="button" class="player-stat-pill ${detail?'detail':''}" ${detail?`data-stat-detail="${detail}" data-member-id="${mid}"`:''}><span class="left"><i class="fa-solid ${icon}"></i><span class="label">${label}</span></span><span class="value">${value}</span></button>`;
+          return `<div class="player-stat-card ${expanded?'expanded':''}" data-stat-card="${mid}">
+            <button type="button" class="player-stat-toggle" data-stat-toggle="${mid}" aria-expanded="${expanded?'true':'false'}">
+              <span class="player-stat-number">${escapeHtml(t.num||'-')}</span>
+              <span class="min-w-0"><span class="player-stat-name block truncate">${escapeHtml(t.name)}</span><span class="player-stat-games block">${t.games}試合</span></span>
+              <span class="player-stat-avg"><span class="label block">打率</span><span class="value block">${formatAvg(t.h,t.ab)}</span></span>
+              <i class="fa-solid fa-chevron-down player-stat-chevron"></i>
+            </button>
+            <div class="player-stat-details">
+              <div class="player-stat-compact-grid">
+                ${item('fa-baseball-bat-ball','打席',t.pa)}
+                ${item('fa-baseball-bat-ball','打数',t.ab)}
+                ${item('fa-baseball','安打',t.h,'hits')}
+                ${item('fa-bullseye','打点',t.rbi)}
+                ${item('fa-circle-dot','四死球',t.bb+t.hbp,'walks')}
+                ${item('fa-circle-xmark','三振',t.k)}
+                ${item('fa-baseball-bat-ball','犠打',t.sh+t.sf,'sac')}
+                ${item('fa-diamond','盗塁',t.sb)}
+              </div>
+            </div>
+          </div>`;
+        }).join("");
       } else {
         const pitchers=seasonPlayerStats.filter(t=>t.pOuts||t.pH||t.pHR||t.pBB||t.pHBP||t.pK||t.pRuns);
-        box.innerHTML=pitchers.length?pitchers.map(t=>`<div class="bg-white rounded-2xl border shadow-sm overflow-hidden"><div class="px-4 py-3 flex items-center gap-3 border-b"><div class="w-9 h-9 rounded-full bg-team-black text-white flex items-center justify-center font-black text-xs">${escapeHtml(t.num||"-")}</div><div><div class="text-sm font-black">${escapeHtml(t.name)}</div><div class="text-[10px] text-gray-400">投手成績</div></div><div class="ml-auto text-right"><div class="text-[10px] text-gray-400">投球回</div><div class="text-xl font-black text-team-red">${formatIP(t.pOuts)}</div></div></div><div class="grid grid-cols-6 text-center text-[10px]"><div class="p-2"><div class="text-gray-400">被安打</div><b>${t.pH}</b></div><div class="p-2"><div class="text-gray-400">被本塁打</div><b>${t.pHR}</b></div><div class="p-2"><div class="text-gray-400">四球</div><b>${t.pBB}</b></div><div class="p-2"><div class="text-gray-400">死球</div><b>${t.pHBP}</b></div><div class="p-2"><div class="text-gray-400">奪三振</div><b>${t.pK}</b></div><div class="p-2"><div class="text-gray-400">失点</div><b>${t.pRuns}</b></div></div></div>`).join(""):'<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">投手成績はまだありません。</div>';
+        box.innerHTML=pitchers.length?pitchers.map(t=>`<div class="player-stat-card"><div class="player-stat-toggle"><span class="player-stat-number">${escapeHtml(t.num||"-")}</span><span class="min-w-0"><span class="player-stat-name block truncate">${escapeHtml(t.name)}</span><span class="player-stat-games block">投手成績</span></span><span class="player-stat-avg"><span class="label block">投球回</span><span class="value block">${formatIP(t.pOuts)}</span></span><span></span></div><div class="player-stat-details" style="display:block"><div class="player-stat-compact-grid"><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-baseball"></i><span class="label">被安打</span></span><span class="value">${t.pH}</span></div><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-house"></i><span class="label">被本塁打</span></span><span class="value">${t.pHR}</span></div><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-circle-dot"></i><span class="label">四球</span></span><span class="value">${t.pBB}</span></div><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-circle-dot"></i><span class="label">死球</span></span><span class="value">${t.pHBP}</span></div><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-circle-xmark"></i><span class="label">奪三振</span></span><span class="value">${t.pK}</span></div><div class="player-stat-pill"><span class="left"><i class="fa-solid fa-person-running"></i><span class="label">失点</span></span><span class="value">${t.pRuns}</span></div></div></div></div>`).join(""):'<div class="bg-white rounded-2xl border p-4 text-xs text-gray-400">投手成績はまだありません。</div>';
       }
     }
 
@@ -2803,7 +2922,16 @@
       modal.classList.remove("hidden");
     }
     function closeStatDetail(){ document.getElementById("stat-detail-modal")?.classList.add("hidden"); }
-    document.getElementById("player-stats-list")?.addEventListener("click",e=>{ const btn=e.target.closest("[data-stat-detail]"); if(btn) openStatDetail(btn.dataset.memberId,btn.dataset.statDetail); });
+    document.getElementById("player-stats-list")?.addEventListener("click",e=>{
+      const detail=e.target.closest("[data-stat-detail]");
+      if(detail){ e.stopPropagation(); openStatDetail(detail.dataset.memberId,detail.dataset.statDetail); return; }
+      const toggle=e.target.closest("[data-stat-toggle]");
+      if(toggle){
+        const id=String(toggle.dataset.statToggle||"");
+        if(expandedStatPlayers.has(id)) expandedStatPlayers.delete(id); else expandedStatPlayers.add(id);
+        renderPlayerStatsDashboard();
+      }
+    });
     document.getElementById("stat-detail-close")?.addEventListener("click",closeStatDetail);
     document.getElementById("stat-detail-close-x")?.addEventListener("click",closeStatDetail);
     document.getElementById("stat-detail-modal")?.addEventListener("click",e=>{ if(e.target.id==="stat-detail-modal") closeStatDetail(); });
