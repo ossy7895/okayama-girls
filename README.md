@@ -1,0 +1,65 @@
+# OKAYAMA Girls 開発・更新手順
+
+既存のGitHub Pagesアプリを維持したまま、Codexでローカルファイルを編集し、ユーザーがGitHub Desktopで更新を公開する運用です。GitHubブラウザでHTMLを手動アップロードする必要はありません。
+
+GitHub Desktopはソースコードを編集するツールではありません。編集はCodexが行い、GitHub Desktopで取得・差分確認・Commit・Pushを行います。
+
+## Windowsでの通常の更新手順
+1. GitHub Desktopを開き、Current repositoryで `okayama-girls` を選びます。Repository → Show in Explorerでフォルダを確認してください。既存のローカルリポジトリが一覧にない場合はFile → Add local repositoryでこのフォルダを指定します。別の場所に重複Cloneしないでください。
+2. Current branchが `main` であることを確認し、Fetch originを押します。Pull originが表示されたら押して最新版を取得します。Changesに未コミット変更がある場合や競合がある場合は、破棄・強制上書きせずCodexに状況確認を依頼してください。
+3. CodexでGitHub Desktopと同じローカルフォルダを開きます。このREADME.mdとindex.htmlが見えるフォルダです。
+4. Codexに変更箇所を具体的に指示します。「AGENTS.mdを守り、○○だけ変更。画像・Firebase・他の画面は維持」と伝えてください。必要な変更の理由・ファイル・影響範囲を確認して承認します。
+5. Codexが承認範囲のファイルを編集します。GitHubへのCommit・Pushはユーザーが行います。
+6. GitHub DesktopのChangesで対象ファイルと差分を確認します。巨大なindex.htmlは差分を表示しきれない場合があるため、Codexにも対象外変更がないことを確認させてください。今回の変更はAGENTS.mdとREADME.mdだけで、index.htmlがChangesに出ないことを確認します。
+7. ユーザーがSummaryに変更内容を入力し、Commit to mainを押します。CommitはPC内への記録です。
+8. ユーザーがPush originを押します。これによりGitHubへ送信され、既存のPages設定に従って公開処理が進みます。
+9. GitHubのActionsまたはSettings → Pagesで公開状況と実際の公開URLを確認します。反映に時間がかかることがあります。公開サイトで対象画面の表示・操作、スマートフォン表示を確認してください。確認目的で既存データを削除・上書きしないでください。
+
+公開設定・公開URLは今回変更していません。Pagesの公開元（mainのルートか、別の設定か）とビルド成功はGitHub側で確認してください。今回のドキュメント追加ではアプリの表示は変わりません。
+
+## 第1段階の確認記録（2026年10月19日）
+- origin: `https://github.com/ossy7895/okayama-girls.git`
+- ブランチ: `main`。開始時の未コミット変更なし。
+- ローカルHEAD・保存済みorigin/main・GitHubへの読み取り専用照会で取得したmainがすべて `f4d0458ddc3d297077d950c91c31632543b34c5c` で一致。照会時点で同期済み。
+- index.html: 8,272,747バイト（約8.27MB）。GitHub上のmainと同じコミットのファイル。
+- 作業前SHA-256: `50C57739E54C7712690E9C1F918C6137C6330B7142E0D96A339BA80EDC3E0E52`
+- タイトルとログイン表示はv9.69、自動更新用meta `og-app-version` は9.65。過去のv9.63と同一とは扱いません。値の相違は記録のみとし、変更していません。
+- GitHub Pagesの配信中HTMLとmainの一致、管理画面のPages設定、ログイン後の実機動作は未確認です。
+
+## ファイル構成
+```text
+okayama-girls/
+├─ .git/         Gitの管理情報（直接編集しない）
+├─ index.html    既存アプリ本体（今回変更なし）
+├─ AGENTS.md     Codex向けの必須開発ルール（今回新規）
+└─ README.md     本手順書と調査記録（今回新規）
+```
+
+開始時の追跡ファイルはindex.htmlだけでした。package.json、ビルド設定、独立した画像フォルダ、Firestoreルールファイル、Pages用ワークフローはありません。アプリの配布ファイルはindex.htmlで、Markdownは運用文書です。GitHub側の設定は別途保持されます。
+
+## 既存アプリの構造（ソースで確認）
+- HTML・CSS・JavaScriptをindex.htmlに集約。Tailwind由来の静的CSSと追加CSS、画面・モーダル、Firebase接続を含むmoduleスクリプトがあります。
+- 管理者・メンバーのログインはFirebase Authenticationのメール・パスワード方式。`users/{uid}` のroleを取得して画面上の権限表示を切り替えます。実際のアクセス制御を担うFirestoreセキュリティルールはこのリポジトリにありません。
+- Firebase JavaScript SDK 10.8.0をgstaticから読み込み、既存プロジェクト `okayama-girls` へ接続します。Firestoreの `settings/header`・`settings/eventTypes`、`notices`、`members`、`events`、`events/{id}/attendance`、`games`、`games/{id}/playerStats`、`users/{uid}` の読み書きを確認しました。onSnapshotによるリアルタイム購読とgetDoc/getDocsによる取得を併用しています。
+- ホーム、連絡事項、予定・出欠、メンバー名鑑・学年計算、スタッフ区分・監督等のアイコン、チーム成績、個人成績、LIVE入力、打順・守備位置設定、試合結果・プレーログ修正、試合終了時の個人成績集計、スマートフォン下部ナビの実装コードがあります。これはソース確認であり、全機能の本番動作を保証するものではありません。
+- LIVE画面は `live-v98-payload` のBase64 HTMLを必要時に復号し、iframeのsrcdocへ設定します。親画面とのpostMessage連携で既存の試合状態と同期します。識別子中のv98はアプリ全体の現行バージョンを示しません。
+- PNG/WebP画像はログイン・ヘッダーのimg、SVG内のimage、CSSの背景、メンバー・スタッフ・個別アイコンのJavaScript配列、オーダーと打球方向の画像としてdata URIで内包されています。画像の抽出・差し替え・再生成はしていません。
+- 外部依存はFont Awesome 6.4.0（cdnjsのCSSとそのフォント）とFirebase SDK・Firebaseサービスです。独立したローカルCSS/JSファイルを配布する構成ではありません。
+
+## バージョン管理・自動更新
+Gitでファイル履歴を管理します。アプリは同じページのHTML先頭の `og-app-version` をキャッシュを避けて取得し、数値で新旧比較します。Rangeリクエストで先頭の取得を試み、約5分ごと、画面再表示・オンライン復帰時などに確認します。
+
+新しい値を検知しても、未保存入力・書き込み処理・LIVE操作・モーダル・入力フォーカス等がある間は更新を待ちます。更新時はsessionStorageにタブ、フィルタ、スクロール等を保存して再読込し、同じユーザーかつ10分以内の場合に復元します。認証情報をこの状態復元用データとして保存する構成ではありません。
+
+将来アプリを更新する場合は、表示v9.69とmeta 9.65の相違、自動更新への影響、更新値の方針を説明して承認を得てください。今回の文書追加でバージョン値を変更する必要はありません。
+
+## 第2段階へ進む前の確認事項（未実装）
+Cloudflare R2への移行は別途指示があるまで実装しません。現ソースではアルバム用のアップロード処理・メディア管理構成は確認できておらず、既に存在すると仮定しません。
+
+- 写真・動画の現保存先、既存メタデータ、容量、公開範囲、既存Firestoreルール・管理者権限、バックアップ方針を確認する必要があります。
+- GitHub Pagesは静的配信のため、R2の秘密鍵を扱う処理を直接実行できません。Firebase IDトークンをサーバー側で検証し、管理者のアップロード・削除、メンバーの非公開閲覧を認可する処理の配置先を決める必要があります。
+- R2バケットの公開可否、署名URLの有効期限、CORS、アップロード制限、削除とメタデータの整合性、費用を設計時に確認します。秘密鍵・管理トークンは公開HTML/JavaScriptに埋め込みません。
+- Firebase認証・既存業務データを維持し、メディア本体だけをR2へ分離する方針です。承認済みUI・共通画像の移動や再生成は今回の範囲外です。
+
+## 今回の検証範囲
+index.htmlのSHA-256・Git差分で不変を確認します。HTML全体が同一なら内部のFirebaseコード・画像・LIVE埋め込みも同一です。文書2件の追加だけで、アプリ処理への変更はありません。本番ログイン・データ更新・成績再集計などの動作試験、Commit・Push・デプロイは行いません。
