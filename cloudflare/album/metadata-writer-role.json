@@ -1,0 +1,9 @@
+{
+  "title": "OKAYAMA Girls album metadata creator",
+  "description": "Create new album metadata and read it for safe retries; no update or delete permission.",
+  "stage": "GA",
+  "includedPermissions": [
+    "datastore.entities.create",
+    "datastore.entities.get"
+  ]
+}

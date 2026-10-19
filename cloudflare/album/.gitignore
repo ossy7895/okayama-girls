@@ -1,0 +1,10 @@
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+.wrangler/
+node_modules/
+*service-account*.json
+*-key.json
+*.json
+!metadata-writer-role.json
