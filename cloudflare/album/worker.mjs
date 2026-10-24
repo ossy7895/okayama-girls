@@ -1,5 +1,5 @@
 // Private album API. R2 access uses a binding; Firebase credentials stay in
-// Worker secrets. Media edits use field masks; photo/video bodies are untouched.
+// Worker secrets. Ordinary edits preserve media; confirmed deletions remove it.
 export const PART_BYTES = 8 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
@@ -108,6 +108,7 @@ async function createMetadata(session, env) {
   if (response.status === 409) {
     const existing = await upstream(`${database(env)}/album/${session.id}`, {headers:{Authorization:`Bearer ${token}`}});
     const fields = existing.ok ? (await existing.json()).fields : null;
+    if (fields?.deleted?.booleanValue) fail(410,'media_deleted');
     if (fields?.source?.stringValue !== 'r2' || fields?.objectKey?.stringValue !== session.key || fields?.uploadedBy?.stringValue !== session.uid) fail(409,'metadata_conflict');
   } else if (!response.ok) fail(503, 'metadata_unavailable');
 }
@@ -134,15 +135,23 @@ async function checkFolder(env, id) {
   const response = await metadataRequest(env, `/albumFolders/${id}`);
   if (response.status === 404) fail(404,'folder_not_found');
   if (!response.ok) fail(503,'metadata_unavailable');
+  const folder = await response.json();
+  if (folder.fields?.deleted?.booleanValue || folder.fields?.deleteState?.stringValue === 'pending') fail(404,'folder_not_found');
 }
-async function listFolders(request, env) {
+async function listFolders(request, env, user) {
   const pageToken = new URL(request.url).searchParams.get('pageToken') || '';
   if (pageToken.length > 4096) fail(400,'invalid_page');
   const params = new URLSearchParams({pageSize:'100'});if (pageToken) params.set('pageToken',pageToken);
   const response = await metadataRequest(env, `/albumFolders?${params}`);
   if (!response.ok) fail(503,'metadata_unavailable');
   const result = await response.json();
-  return json({folders:(result.documents || []).map(folderData),nextPageToken:result.nextPageToken || ''});
+  const documents=result.documents || [];
+  const pending=user.role==='admin'?documents.filter(document=>document.fields?.deleteState?.stringValue==='pending').map(document=>deletionData(document,'folder')):[];
+  if(user.role==='admin'&&!pageToken){
+    const jobs=await queryMetadata(env,'album',{fieldFilter:{field:{fieldPath:'deleteState'},op:'EQUAL',value:{stringValue:'pending'}}},12,['title','deleteVersion','deleted','deleteState']);
+    pending.push(...jobs.map(document=>deletionData(document,'media')));
+  }
+  return json({folders:documents.filter(document=>!document.fields?.deleted?.booleanValue&&document.fields?.deleteState?.stringValue!=='pending').map(folderData),nextPageToken:result.nextPageToken || '',features:{mediaDeletion:true,folderDeletion:true},pendingDeletions:pending});
 }
 async function createFolder(request, env, user) {
   const input = await readJson(request), title = metadataTitle(input.title);
@@ -163,12 +172,14 @@ async function editableMedia(env, user, id) {
   if (response.status === 404) fail(404,'media_not_found');
   if (!response.ok) fail(response.status >= 500 ? 503 : 403,'access_denied');
   const document = await response.json();
+  if (document.fields?.deleted?.booleanValue) fail(410,'media_deleted');
   if (!document.updateTime) fail(503,'metadata_unavailable');
   return document;
 }
-async function patchFields(env, path, fields, updateTime) {
+async function patchFields(env, path, fields, updateTime, clearFields = []) {
   const params = new URLSearchParams({'currentDocument.updateTime':updateTime});
   Object.keys(fields).forEach(key=>params.append('updateMask.fieldPaths',key));
+  clearFields.forEach(key=>params.append('updateMask.fieldPaths',key));
   const response = await metadataRequest(env, `${path}?${params}`, {method:'PATCH',body:JSON.stringify({fields})});
   if ([409,412].includes(response.status)) fail(409,'metadata_conflict');
   if (!response.ok) fail(503,'metadata_unavailable');
@@ -182,6 +193,7 @@ async function renameFolder(request, env, user, id) {
   if (response.status === 404) fail(404,'folder_not_found');
   if (!response.ok) fail(503,'metadata_unavailable');
   const document = await response.json();
+  if (document.fields?.deleted?.booleanValue || document.fields?.deleteState?.stringValue==='pending') fail(404,'folder_not_found');
   if (input.updateTime && input.updateTime !== document.updateTime) fail(409,'metadata_conflict');
   const updated = await patchFields(env, `/albumFolders/${id}`, {title:{stringValue:title},updatedAt:{integerValue:String(Date.now())},updatedBy:{stringValue:user.uid}}, document.updateTime);
   return json(folderData(updated));
@@ -207,6 +219,88 @@ async function moveMedia(request, env, user) {
   if ([409,412].includes(response.status)) fail(409,'metadata_conflict');
   if (!response.ok) fail(503,'metadata_unavailable');
   return json({ids:input.ids,folderId:input.folderId});
+}
+async function queryMetadata(env, collection, where, limit = 24, selected = []) {
+  const structuredQuery={from:[{collectionId:collection}],where,limit};
+  if(selected.length)structuredQuery.select={fields:selected.map(fieldPath=>({fieldPath}))};
+  const response=await metadataRequest(env,':runQuery',{method:'POST',body:JSON.stringify({structuredQuery})});
+  if(!response.ok)fail(503,'metadata_unavailable');
+  return (await response.json()).flatMap(row=>row.document?[row.document]:[]);
+}
+function deletionData(document, type) {
+  return {id:document.name.split('/').pop(),type,title:document.fields?.title?.stringValue || (type==='folder'?'フォルダ':'写真・動画'),updateTime:document.fields?.deleteVersion?.stringValue || document.updateTime,done:document.fields?.deleteState?.stringValue==='done'};
+}
+function deletionVersion(input) {
+  if(Object.keys(input).some(key=>key!=='updateTime')||typeof input.updateTime!=='string'||!input.updateTime||input.updateTime.length>150)fail(400,'invalid_confirmation');
+  return input.updateTime;
+}
+async function deletionMedia(env, user, id) {
+  const params=new URLSearchParams();['title','source','objectKey','mediaType','deleted','deleteState','deleteVersion','deleteObjectKey'].forEach(field=>params.append('mask.fieldPaths',field));
+  const response=await upstream(`${database(env)}/album/${documentId(id)}?${params}`,{headers:{Authorization:`Bearer ${user.token}`}});
+  if(response.status===404)fail(404,'media_not_found');if(!response.ok)fail(response.status>=500?503:403,'access_denied');
+  const document=await response.json();if(!document.updateTime)fail(503,'metadata_unavailable');
+  document.name=`projects/${project(env)}/databases/(default)/documents/album/${id}`;return document;
+}
+async function previewMediaDeletion(env, user, id) {
+  const document=await deletionMedia(env,user,id);
+  return json({...deletionData(document,'media'),kind:document.fields?.mediaType?.stringValue==='video'?'動画':'写真'});
+}
+async function deleteMedia(request, env, user, id) {
+  const version=deletionVersion(await readJson(request));let document=await deletionMedia(env,user,id),fields=document.fields || {};
+  if(fields.deleted?.booleanValue){
+    if(fields.deleteVersion?.stringValue!==version)fail(409,'metadata_conflict');
+    if(fields.deleteState?.stringValue==='done')return json({id,done:true});
+  }else{
+    if(document.updateTime!==version)fail(409,'metadata_conflict');
+    let key='';
+    if(fields.source?.stringValue==='r2'){
+      if(!UUID.test(id)||fields.objectKey?.stringValue!==mediaKey(id))fail(409,'invalid_media');
+      key=mediaKey(id);const object=await env.MEDIA.head(key);if(object&&object.customMetadata?.albumId!==id)fail(409,'invalid_media');
+    }
+    const marker={deleted:{booleanValue:true},deleteState:{stringValue:'pending'},deleteVersion:{stringValue:version},deletedAt:{integerValue:String(Date.now())},deletedBy:{stringValue:user.uid},deleteObjectKey:{stringValue:key}};
+    document=await patchFields(env,`/album/${documentId(id)}`,marker,document.updateTime,['url','objectKey','source','mimeType','mediaType','size','originalFilename','uploadedBy','folderId']);fields=document.fields;
+  }
+  const key=fields.deleteObjectKey?.stringValue || '';
+  if(key){
+    if(!UUID.test(id)||key!==mediaKey(id))fail(409,'invalid_media');
+    try{
+      const object=await env.MEDIA.head(key);if(object&&object.customMetadata?.albumId!==id)fail(409,'invalid_media');
+      await env.MEDIA.delete(key);await env.MEDIA.delete(sessionKey(id));
+    }catch(error){if(error instanceof ApiError)throw error;fail(503,'deletion_pending');}
+  }
+  await patchFields(env,`/album/${documentId(id)}`,{deleteState:{stringValue:'done'}},document.updateTime,['deleteObjectKey','title']);
+  return json({id,done:true});
+}
+async function deletionFolder(env, id) {
+  if(!UUID.test(id))fail(400,'invalid_folder');
+  const response=await metadataRequest(env,`/albumFolders/${id}`);if(response.status===404)fail(404,'folder_not_found');if(!response.ok)fail(503,'metadata_unavailable');return response.json();
+}
+async function previewFolderDeletion(env, id) {
+  const document=await deletionFolder(env,id);
+  const query={from:[{collectionId:'album'}],where:{fieldFilter:{field:{fieldPath:'folderId'},op:'EQUAL',value:{stringValue:id}}}};
+  const response=await metadataRequest(env,':runAggregationQuery',{method:'POST',body:JSON.stringify({structuredAggregationQuery:{structuredQuery:query,aggregations:[{alias:'mediaCount',count:{}}]}})});
+  if(!response.ok)fail(503,'metadata_unavailable');
+  const rows=await response.json(),count=Number(rows.find(row=>row.result?.aggregateFields?.mediaCount)?.result.aggregateFields.mediaCount.integerValue || 0);
+  return json({...deletionData(document,'folder'),count,keepsMedia:true});
+}
+async function deleteFolder(request, env, user, id) {
+  const version=deletionVersion(await readJson(request));let document=await deletionFolder(env,id),fields=document.fields || {};
+  if(fields.deleteState?.stringValue==='done'&&fields.deleted?.booleanValue){if(fields.deleteVersion?.stringValue!==version)fail(409,'metadata_conflict');return json({id,done:true,returned:0});}
+  if(fields.deleteState?.stringValue==='pending'){if(fields.deleteVersion?.stringValue!==version)fail(409,'metadata_conflict');}
+  else{
+    if(document.updateTime!==version)fail(409,'metadata_conflict');
+    document=await patchFields(env,`/albumFolders/${id}`,{deleteState:{stringValue:'pending'},deleteVersion:{stringValue:version},deletedAt:{integerValue:String(Date.now())},deletedBy:{stringValue:user.uid}},document.updateTime);
+  }
+  const children=await queryMetadata(env,'album',{fieldFilter:{field:{fieldPath:'folderId'},op:'EQUAL',value:{stringValue:id}}},24,['folderId']);
+  if(children.length){
+    const updates={folderId:{stringValue:''},updatedAt:{integerValue:String(Date.now())},updatedBy:{stringValue:user.uid}};
+    const writes=children.map(child=>({update:{name:child.name,fields:updates},updateMask:{fieldPaths:Object.keys(updates)},currentDocument:{updateTime:child.updateTime}}));
+    const response=await metadataRequest(env,':commit',{method:'POST',body:JSON.stringify({writes})});
+    if([409,412].includes(response.status))fail(409,'metadata_conflict');if(!response.ok)fail(503,'metadata_unavailable');
+  }
+  if(children.length===24)return json({id,done:false,returned:children.length});
+  await patchFields(env,`/albumFolders/${id}`,{deleted:{booleanValue:true},deleteState:{stringValue:'done'}},document.updateTime,['title','createdBy','updatedAt','updatedBy']);
+  return json({id,done:true,returned:children.length});
 }
 async function sessionFor(id, user, env) {
   if (!UUID.test(id)) fail(404, 'upload_not_found');
@@ -274,6 +368,7 @@ async function completeUpload(request, env, user, id) {
   if (object.size !== session.size || object.customMetadata?.albumId !== session.id) fail(409,'invalid_upload');
   // An interrupted metadata request can safely retry: the completed object and
   // session are retained, and createDocument never replaces an existing photo.
+  if(session.folderId){try{await checkFolder(env,session.folderId);}catch(error){if(error instanceof ApiError&&error.message==='folder_not_found')session.folderId='';else throw error;}}
   await createMetadata(session,env);
   session.completed = true;
   await env.MEDIA.put(sessionKey(id),JSON.stringify(session),{httpMetadata:{contentType:'application/json'}});
@@ -296,6 +391,7 @@ async function issueTicket(request,env,user,id) {
   const response = await upstream(`${database(env)}/album/${id}`,{headers:{Authorization:`Bearer ${user.token}`}});
   if (!response.ok) fail(response.status >= 500 ? 503 : 404,'media_not_found');
   const fields = (await response.json()).fields;
+  if(fields?.deleted?.booleanValue)fail(404,'media_not_found');
   if (fields?.source?.stringValue !== 'r2' || fields?.objectKey?.stringValue !== mediaKey(id)) fail(404,'media_not_found');
   const expires = Math.floor(Date.now()/1000)+TICKET_SECONDS;
   const signature = await crypto.subtle.sign('HMAC',await signingKey(env),ticketMessage(id,expires));
@@ -334,18 +430,24 @@ async function serveMedia(request,env,id) {
 async function route(request,env) {
   if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
-  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true}});
+  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
-  const write=!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path));
+  const write=path.endsWith('/delete-preview')||(!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path)));
   const user=await authenticate(request,env,write);
-  if(path==='/folders'&&request.method==='GET')return listFolders(request,env);
+  if(path==='/folders'&&request.method==='GET')return listFolders(request,env,user);
   if(path==='/folders'&&request.method==='POST')return createFolder(request,env,user);
   const folder=path.match(/^\/folders\/([^/]+)$/);
   if(folder&&request.method==='PATCH')return renameFolder(request,env,user,folder[1]);
+  if(folder&&request.method==='DELETE')return deleteFolder(request,env,user,folder[1]);
+  const folderPreview=path.match(/^\/folders\/([^/]+)\/delete-preview$/);
+  if(folderPreview&&request.method==='GET')return previewFolderDeletion(env,folderPreview[1]);
   if(path==='/media/move'&&request.method==='POST')return moveMedia(request,env,user);
   const edit=path.match(/^\/media\/([^/]+)$/);
   if(edit&&request.method==='PATCH')return editMedia(request,env,user,decodeURIComponent(edit[1]));
+  if(edit&&request.method==='DELETE')return deleteMedia(request,env,user,decodeURIComponent(edit[1]));
+  const mediaPreview=path.match(/^\/media\/([^/]+)\/delete-preview$/);
+  if(mediaPreview&&request.method==='GET')return previewMediaDeletion(env,user,decodeURIComponent(mediaPreview[1]));
   if(path==='/uploads'&&request.method==='POST')return createUpload(request,env,user);
   const part=path.match(/^\/uploads\/([^/]+)\/parts\/(\d+)$/);
   if(part&&request.method==='PUT')return uploadPart(request,env,user,part[1],part[2]);

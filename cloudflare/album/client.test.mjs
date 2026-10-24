@@ -24,7 +24,7 @@ class Element {
 }
 function fixture(){
   const elements=new Map();const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,new Element('div',document));return elements.get(id);},createElement(tag){return new Element(tag,document);}};
-  const state={docs:[],folders:[],backend:true,queries:[],requests:[],created:[],completed:new Set(),chunks:[],failName:'',refreshes:[],next:1};
+  const state={docs:[],folders:[],backend:true,deletionFeature:true,pendingDeletions:[],queries:[],requests:[],created:[],completed:new Set(),chunks:[],failName:'',refreshes:[],next:1};
   const user={uid:'admin',getIdToken:async force=>{state.refreshes.push(force);return 'firebase-test-token';}};
   const context={document,appScreen:document.getElementById('app-screen'),auth:{currentUser:user},currentRole:'admin',db:{},AbortController,DOMException,URL,Response,Blob,crypto,console,setTimeout:work=>queueMicrotask(work),
     collection:(db,path)=>path,orderBy:(key,direction)=>({key,direction}),where:(key,operator,value)=>({where:key,value}),limit:n=>({limit:n}),startAfter:doc=>({after:doc.id}),query:(path,...clauses)=>({path,clauses}),
@@ -34,10 +34,15 @@ function fixture(){
       const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):null;
       if(path==='/folders'){
         if(!state.backend)return Response.json({error:'not_found'},{status:404});
-        if(options.method==='GET')return Response.json({folders:state.folders,nextPageToken:''});
+        if(options.method==='GET')return Response.json({folders:state.folders,nextPageToken:'',features:{mediaDeletion:state.deletionFeature,folderDeletion:state.deletionFeature},pendingDeletions:state.pendingDeletions});
         const folder={...body,updateTime:'folder-v1'};state.folders.push(folder);return Response.json(folder,{status:201});
       }
       if(path.startsWith('/folders/')&&options.method==='PATCH'){const folder=state.folders.find(f=>f.id===path.split('/').pop());folder.title=body.title;return Response.json(folder);}
+      if(path.endsWith('/delete-preview')){
+        const id=path.split('/')[2],folder=path.startsWith('/folders/'),item=(folder?state.folders:state.docs).find(d=>d.id===id);return Response.json({id,type:folder?'folder':'media',title:item.title,updateTime:'confirmed-version',count:folder?state.docs.filter(d=>d.folderId===id&&!d.deleted).length:undefined,keepsMedia:folder});
+      }
+      if(options.method==='DELETE'&&path.startsWith('/media/')){const id=path.split('/')[2],item=state.docs.find(d=>d.id===id);assert.equal(body.updateTime,'confirmed-version');item.deleted=true;delete item.url;return Response.json({id,done:true});}
+      if(options.method==='DELETE'&&path.startsWith('/folders/')){const id=path.split('/')[2];let returned=0;for(const item of state.docs)if(item.folderId===id){item.folderId='';returned++;}state.folders=state.folders.filter(d=>d.id!==id);return Response.json({id,done:true,returned});}
       if(path==='/media/move'){for(const id of body.ids)state.docs.find(d=>d.id===id).folderId=body.folderId;return Response.json({ids:body.ids,folderId:body.folderId});}
       if(path.startsWith('/media/')&&options.method==='PATCH'){const item=state.docs.find(d=>d.id===path.split('/').pop());Object.assign(item,body);return Response.json(item);}
       if(path==='/uploads'){
@@ -146,4 +151,27 @@ test('unsupported or oversize files never reach the API',async()=>{
   const {state,element,click}=fixture();element('album-upload-files').files=[{...file('bad.svg'),type:'image/svg+xml'}];
   await click('album-upload-button');assert.equal(state.requests.length,0);assert.ok(element('album-upload-status').textContent.includes('対応していない'));
   element('album-upload-files').files=[{...file('big.png'),size:26*1024**2}];await click('album-upload-button');assert.equal(state.requests.length,0);
+});
+
+test('media deletion opens a named confirmation, cancel does not delete, and confirmed deletion refreshes the gallery',async()=>{
+  const {context,state,element}=fixture();state.docs=[{id:'one',title:'削除対象',url:'data:image/jpeg;base64,/9j/AA=='},{id:'two',title:'保持する写真'}];await context.loadAlbum();
+  await context.openAlbumDeletion('media',state.docs[0],element('remove'));assert.equal(context.appScreen.inert,true);assert.equal(element('album-delete-name').textContent,'削除対象');assert.ok(element('album-delete-description').textContent.includes('元に戻せません'));assert.equal(state.requests.filter(r=>r.options.method==='DELETE').length,0);
+  context.closeAlbumDeletion();assert.equal(context.appScreen.inert,false);assert.equal(state.docs[0].deleted,undefined);
+  await context.openAlbumDeletion('media',state.docs[0],element('remove'));await context.confirmAlbumDeletion();assert.equal(state.docs[0].deleted,true);assert.equal(state.docs[1].deleted,undefined);assert.equal(element('album-gallery').children.length,1);assert.ok(element('album-gallery').textContent.includes('保持する写真'));
+});
+test('folder deletion clearly preserves media and returns the existing records to the photos tab',async()=>{
+  const {context,state,element}=fixture();state.folders=[{id:'a',title:'削除するフォルダ'}];state.docs=[{id:'one',title:'残す写真',folderId:'a',url:'keep'}];await context.setAlbumView('folders','a');
+  await context.openAlbumDeletion('folder',state.folders[0],element('remove'));assert.ok(element('album-delete-description').textContent.includes('削除せず'));assert.ok(element('album-delete-description').textContent.includes('1件'));assert.equal(element('album-delete-confirm').textContent,'フォルダだけ削除する');
+  await context.confirmAlbumDeletion();assert.equal(state.folders.length,0);assert.equal(state.docs.length,1);assert.equal(state.docs[0].url,'keep');assert.equal(state.docs[0].folderId,'');assert.equal(state.docs[0].deleted,undefined);assert.equal(element('album-gallery').children.length,1);
+});
+test('deletion is hidden for members and unavailable until the server advertises support',async()=>{
+  const {context,state,element}=fixture();state.docs=[{id:'one',title:'既存写真'}];state.deletionFeature=false;await context.loadAlbum();assert.ok(element('album-deletion-status').textContent.includes('サーバー更新待ち'));await context.openAlbumDeletion('media',state.docs[0],element('remove'));assert.equal(state.requests.some(r=>r.url.includes('delete-preview')),false);
+  context.currentRole='member';state.deletionFeature=true;await context.loadAlbum();assert.equal(element('album-gallery').children[0].children.length,1);assert.equal(element('album-pending-deletions').classList.contains('hidden'),true);await context.openAlbumDeletion('media',state.docs[0],element('remove'));assert.equal(state.requests.some(r=>r.url.includes('delete-preview')),false);
+});
+test('deleted rows are skipped during pagination, and media with a removed folder remains visible in photos',async()=>{
+  const {context,state,element}=fixture();state.docs=Array.from({length:25},(_,i)=>({id:'gone-'+i,title:'削除済み',deleted:true}));state.docs.push({id:'remaining',title:'フォルダがなくても残る',folderId:'removed-folder'});await context.loadAlbum();assert.equal(element('album-gallery').children.length,1);assert.ok(element('album-gallery').textContent.includes('フォルダがなくても残る'));assert.ok(!element('album-gallery').textContent.includes('削除済み'));
+});
+test('a deletion preview arriving after logout cannot enable deletion or expose its title',async()=>{
+  const {context,state,element}=fixture();state.docs=[{id:'one',title:'private'}];await context.loadAlbum();let resolve;
+  context.fetch=()=>new Promise(done=>{resolve=done;});const opening=context.openAlbumDeletion('media',state.docs[0],element('remove'));for(let i=0;i<10&&!resolve;i++)await new Promise(setImmediate);assert.ok(resolve);context.auth.currentUser=null;context.resetAlbum();resolve(Response.json({id:'one',title:'late private title',updateTime:'v1'}));await opening;assert.equal(element('album-delete-modal').classList.contains('hidden'),true);assert.ok(!element('album-delete-name').textContent.includes('late private title'));assert.equal(element('album-delete-confirm').disabled,true);
 });

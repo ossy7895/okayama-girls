@@ -24,7 +24,7 @@ class MemoryR2 {
     const data=range?value.data.slice(range.offset,range.offset+range.length):value.data;
     return {...await this.head(key),body:new Blob([data]).stream(),json:async()=>JSON.parse(new TextDecoder().decode(data))};
   }
-  async delete(key){this.objects.delete(key);}
+  async delete(key){if(this.failMediaDelete&&key.startsWith('album-media/'))throw new Error('simulated R2 outage');this.objects.delete(key);}
   async createMultipartUpload(key,options){const id=crypto.randomUUID();this.uploads.set(id,{key,options,parts:new Map()});return this.resumeMultipartUpload(key,id);}
   resumeMultipartUpload(key,id){
     const upload=this.uploads.get(id);
@@ -79,6 +79,14 @@ function fixture(){
       assert.equal(options.headers.Authorization,'Bearer server-token');if(state.listDenied)return Response.json({error:{}},{status:403});
       return Response.json({documents:[...folders.values()]});
     }
+    if(target.pathname.endsWith('/documents:runQuery')||target.pathname.endsWith('/documents:runAggregationQuery')){
+      assert.equal(options.headers.Authorization,'Bearer server-token');if(state.listDenied)return Response.json({}, {status:403});
+      const input=JSON.parse(options.body),query=input.structuredQuery||input.structuredAggregationQuery.structuredQuery,map=query.from[0].collectionId==='album'?docs:folders;
+      const filter=query.where.fieldFilter,field=filter.field.fieldPath,value=filter.value.stringValue;
+      const matched=[...map.entries()].filter(([,document])=>document.fields?.[field]?.stringValue===value);
+      if(input.structuredAggregationQuery)return Response.json([{result:{aggregateFields:{mediaCount:{integerValue:String(matched.length)}}}}]);
+      return Response.json(matched.slice(0,query.limit||24).map(([id,document])=>({document:{...document,name:'projects/okayama-girls/databases/(default)/documents/'+query.from[0].collectionId+'/'+id}})));
+    }
     const folderId=target.pathname.match(/\/documents\/albumFolders\/([^/]+)$/)?.[1];
     const mediaId=target.pathname.match(/\/documents\/album\/([^/]+)$/)?.[1];
     if((folderId||mediaId)&&options.method==='PATCH'){
@@ -86,8 +94,9 @@ function fixture(){
       const map=folderId?folders:docs,id=decodeURIComponent(folderId||mediaId),document=map.get(id);if(!document)return Response.json({}, {status:404});
       if(document.updateTime!==target.searchParams.get('currentDocument.updateTime'))return Response.json({}, {status:412});
       const fields=JSON.parse(options.body).fields,masks=target.searchParams.getAll('updateMask.fieldPaths');
-      assert.deepEqual(Object.keys(fields).sort(),masks.sort());assert.ok(masks.every(key=>['title','folderId','updatedAt','updatedBy'].includes(key)));
-      const updated=stamp({...document,fields:{...document.fields,...fields}});map.set(id,updated);state.patches.push({id,masks});return Response.json(updated);
+      assert.ok(Object.keys(fields).every(key=>masks.includes(key)));assert.ok(masks.every(key=>['title','folderId','updatedAt','updatedBy','deleted','deleteState','deleteVersion','deleteObjectKey','deletedAt','deletedBy','url','objectKey','source','mimeType','mediaType','size','originalFilename','uploadedBy','createdBy'].includes(key)));
+      const next={...document.fields};for(const key of masks){if(key in fields)next[key]=fields[key];else delete next[key];}
+      const updated=stamp({...document,fields:next});map.set(id,updated);state.patches.push({id,masks});return Response.json(updated);
     }
     if(target.pathname.endsWith('/documents:commit')){
       assert.equal(options.headers.Authorization,'Bearer server-token');if(state.updateDenied)return Response.json({error:{}},{status:403});
@@ -182,7 +191,7 @@ test('folder creation/listing/renaming is role checked and idempotent without de
   assert.equal((await api(env,'/folders/'+id,{method:'PATCH',body:{title:'大会',updateTime:old}})).status,200);
   assert.equal(state.folders.get(id).fields.title.stringValue,'大会');
   assert.equal((await api(env,'/folders/'+id,{method:'PATCH',body:{title:'競合',updateTime:old}})).status,409);
-  assert.equal((await api(env,'/folders/'+id,{method:'DELETE'})).status,404);
+  assert.equal((await api(env,'/folders/'+id,{token:'member',method:'DELETE'})).status,403);
 }));
 test('legacy photo titles and folder membership can change both ways without changing the photo or its timestamp',()=>runFixture(async({env,state})=>{
   const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'大会'}});
@@ -212,4 +221,65 @@ test('upload destinations are validated before creating R2 objects; new IAM fail
   const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'保存先'}});const upload=await start(env,{folderId:id});await finish(env,upload,[await put(env,upload)]);assert.equal(state.docs.get(upload.id).fields.folderId.stringValue,id);
   state.updateDenied=true;const denied=await api(env,'/media/legacy-photo',{method:'PATCH',body:{title:'編集'}});assert.equal(denied.status,503);assert.equal((await denied.json()).error,'metadata_permissions_required');
   state.listDenied=true;assert.equal((await api(env,'/folders',{method:'GET'})).status,503);
+}));
+
+test('media deletion requires an administrator and a current explicit confirmation, and preserves unrelated photos',()=>runFixture(async({env,state})=>{
+  for(const token of [null,'member','stranger']){
+    assert.ok([401,403].includes((await api(env,'/media/legacy-photo/delete-preview',{token,method:'GET'})).status));
+    assert.ok([401,403].includes((await api(env,'/media/legacy-photo',{token,method:'DELETE',body:{updateTime:'version-1'}})).status));
+  }
+  const original=structuredClone(state.docs.get('legacy-photo'));
+  assert.equal((await api(env,'/media/legacy-photo',{method:'DELETE',body:{}})).status,400);
+  assert.equal((await api(env,'/media/legacy-photo',{method:'DELETE',body:{updateTime:'stale'}})).status,409);assert.deepEqual(state.docs.get('legacy-photo'),original);
+  const upload=await start(env),part=await put(env,upload);await finish(env,upload,[part]);const unrelated=structuredClone(state.docs.get(upload.id));
+  const preview=await (await api(env,'/media/legacy-photo/delete-preview',{method:'GET'})).json();
+  assert.equal((await api(env,'/media/legacy-photo',{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
+  const fields=state.docs.get('legacy-photo').fields;assert.equal(fields.deleted.booleanValue,true);assert.equal(fields.deleteState.stringValue,'done');assert.equal(fields.url,undefined);assert.equal(fields.title,undefined);assert.equal(fields.createdAt.integerValue,'100');assert.deepEqual(state.docs.get(upload.id),unrelated);
+  assert.equal((await api(env,'/media/legacy-photo',{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
+  assert.equal((await api(env,'/media/legacy-photo',{method:'PATCH',body:{title:'復活不可'}})).status,410);
+}));
+test('R2 deletion removes only the exact managed file, revokes viewing, and cannot recreate it through upload completion',()=>runFixture(async({env,state})=>{
+  const upload=await start(env),part=await put(env,upload);await finish(env,upload,[part]);
+  const ticket=await (await api(env,`/media/${upload.id}/access`,{token:'member'})).json();
+  const preview=await (await api(env,`/media/${upload.id}/delete-preview`,{method:'GET'})).json();
+  assert.equal((await api(env,`/media/${upload.id}`,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
+  assert.equal(await env.MEDIA.head('album-media/'+upload.id),null);assert.equal(await env.MEDIA.head('album-pending/'+upload.id+'.json'),null);
+  assert.equal((await api(env,`/media/${upload.id}/access`,{token:'member'})).status,404);
+  assert.equal((await worker.fetch(new Request(ticket.url),env)).status,404);
+  assert.ok((await finish(env,upload,[part])).status>=400);assert.equal(state.docs.get(upload.id).fields.deleted.booleanValue,true);
+  const other=await start(env),otherPart=await put(env,other);await finish(env,other,[otherPart]);
+  state.docs.get(other.id).fields.objectKey={stringValue:'album-media/'+upload.id};
+  const unsafe=await (await api(env,`/media/${other.id}/delete-preview`,{method:'GET'})).json();
+  assert.equal((await api(env,`/media/${other.id}`,{method:'DELETE',body:{updateTime:unsafe.updateTime}})).status,409);assert.ok(await env.MEDIA.head('album-media/'+other.id));
+}));
+test('failed R2 cleanup is visible only to administrators and can be resumed safely',()=>runFixture(async({env,state})=>{
+  const upload=await start(env),part=await put(env,upload);await finish(env,upload,[part]);
+  const preview=await (await api(env,`/media/${upload.id}/delete-preview`,{method:'GET'})).json();env.MEDIA.failMediaDelete=true;
+  const failed=await api(env,`/media/${upload.id}`,{method:'DELETE',body:{updateTime:preview.updateTime}});assert.equal(failed.status,503);assert.equal((await failed.json()).error,'deletion_pending');assert.ok(await env.MEDIA.head('album-media/'+upload.id));assert.equal(state.docs.get(upload.id).fields.deleted.booleanValue,true);
+  const admin=await (await api(env,'/folders',{method:'GET'})).json();assert.equal(admin.pendingDeletions[0].id,upload.id);
+  const member=await (await api(env,'/folders',{method:'GET',token:'member'})).json();assert.deepEqual(member.pendingDeletions,[]);
+  env.MEDIA.failMediaDelete=false;assert.equal((await api(env,`/media/${upload.id}`,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);assert.equal(await env.MEDIA.head('album-media/'+upload.id),null);
+}));
+test('folder deletion returns every photo to the ungrouped tab across batches without deleting image data',()=>runFixture(async({env,state})=>{
+  const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'消すフォルダ'}});
+  for(let i=0;i<26;i++)state.docs.set('child-'+i,{fields:{folderId:{stringValue:id},title:{stringValue:'写真'+i},url:{stringValue:'KEEP-'+i},createdAt:{integerValue:String(i)}},updateTime:'child-version-'+i});
+  const preview=await (await api(env,'/folders/'+id+'/delete-preview',{method:'GET'})).json();assert.equal(preview.count,26);assert.equal(preview.keepsMedia,true);
+  assert.equal((await api(env,'/folders/'+id,{method:'DELETE',token:'member',body:{updateTime:preview.updateTime}})).status,403);
+  const first=await (await api(env,'/folders/'+id,{method:'DELETE',body:{updateTime:preview.updateTime}})).json();assert.equal(first.done,false);assert.equal(first.returned,24);
+  const listing=await (await api(env,'/folders',{method:'GET'})).json();assert.equal(listing.folders.length,0);assert.ok(listing.pendingDeletions.some(job=>job.id===id));
+  assert.equal((await api(env,'/folders/'+id,{method:'PATCH',body:{title:'競合'}})).status,404);
+  const last=await (await api(env,'/folders/'+id,{method:'DELETE',body:{updateTime:preview.updateTime}})).json();assert.equal(last.done,true);assert.equal(last.returned,2);
+  for(let i=0;i<26;i++){const fields=state.docs.get('child-'+i).fields;assert.equal(fields.folderId.stringValue,'');assert.equal(fields.url.stringValue,'KEEP-'+i);assert.equal(fields.title.stringValue,'写真'+i);assert.equal(fields.deleted,undefined);}
+  assert.equal(state.docs.size,27);assert.equal(state.folders.get(id).fields.deleted.booleanValue,true);assert.equal(env.MEDIA.objects.size,0);
+  assert.equal((await api(env,'/folders/'+id,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
+}));
+test('metadata permission failures leave the original photo and media untouched',()=>runFixture(async({env,state})=>{
+  const upload=await start(env),part=await put(env,upload);await finish(env,upload,[part]);const original=structuredClone(state.docs.get(upload.id));
+  const preview=await (await api(env,`/media/${upload.id}/delete-preview`,{method:'GET'})).json();state.updateDenied=true;
+  assert.equal((await api(env,`/media/${upload.id}`,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,503);assert.deepEqual(state.docs.get(upload.id),original);assert.ok(await env.MEDIA.head('album-media/'+upload.id));
+}));
+test('a photo already uploading when its destination folder is removed is retained in the ungrouped album',()=>runFixture(async({env,state})=>{
+  const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'アップロード中'}});const upload=await start(env,{folderId:id}),part=await put(env,upload);
+  const preview=await (await api(env,'/folders/'+id+'/delete-preview',{method:'GET'})).json();assert.equal((await api(env,'/folders/'+id,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
+  assert.equal((await finish(env,upload,[part])).status,200);assert.equal(state.docs.get(upload.id).fields.folderId,undefined);assert.ok(await env.MEDIA.head('album-media/'+upload.id));
 }));
