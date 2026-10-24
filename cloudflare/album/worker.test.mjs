@@ -43,7 +43,9 @@ class MemoryR2 {
 }
 function fixture(){
   const docs=new Map([['legacy-photo',{fields:{title:{stringValue:'既存写真'},url:{stringValue:'data:image/jpeg;base64,EXISTING'},createdAt:{integerValue:'100'}}}]]);
-  const state={docs,metadataFails:false,writes:[],calls:[]};
+  let version=1;const stamp=document=>({...document,updateTime:'version-'+version++});
+  for(const [id,document] of docs)docs.set(id,stamp(document));
+  const folders=new Map(),state={docs,folders,metadataFails:false,writes:[],calls:[],updateDenied:false,listDenied:false,patches:[]};
   const env={MEDIA:new MemoryR2(),FIREBASE_PROJECT_ID:'okayama-girls',FIREBASE_WEB_API_KEY:'public-test-key',FIREBASE_SERVICE_ACCOUNT:account,MEDIA_SIGNING_KEY:'test-only-signing-key-with-at-least-32-characters',ALLOWED_ORIGIN:ORIGIN};
   state.fetch=async(url,options={})=>{
     state.calls.push(String(url));const target=new URL(url);
@@ -66,8 +68,35 @@ function fixture(){
       const id=target.searchParams.get('documentId');
       if(state.metadataFails)return Response.json({error:{}},{status:503});
       if(docs.has(id))return Response.json({error:{}},{status:409});
-      const data=JSON.parse(options.body);docs.set(id,data);state.writes.push(id);return Response.json(data);
+      const data=stamp(JSON.parse(options.body));docs.set(id,data);state.writes.push(id);return Response.json(data);
     }
+    if(target.pathname.endsWith('/documents/albumFolders')&&options.method==='POST'){
+      assert.equal(options.headers.Authorization,'Bearer server-token');const id=target.searchParams.get('documentId');
+      if(folders.has(id))return Response.json({error:{}},{status:409});
+      const data=stamp({...JSON.parse(options.body),name:'projects/okayama-girls/databases/(default)/documents/albumFolders/'+id});folders.set(id,data);return Response.json(data);
+    }
+    if(target.pathname.endsWith('/documents/albumFolders')&&(!options.method||options.method==='GET')){
+      assert.equal(options.headers.Authorization,'Bearer server-token');if(state.listDenied)return Response.json({error:{}},{status:403});
+      return Response.json({documents:[...folders.values()]});
+    }
+    const folderId=target.pathname.match(/\/documents\/albumFolders\/([^/]+)$/)?.[1];
+    const mediaId=target.pathname.match(/\/documents\/album\/([^/]+)$/)?.[1];
+    if((folderId||mediaId)&&options.method==='PATCH'){
+      assert.equal(options.headers.Authorization,'Bearer server-token');if(state.updateDenied)return Response.json({error:{}},{status:403});
+      const map=folderId?folders:docs,id=decodeURIComponent(folderId||mediaId),document=map.get(id);if(!document)return Response.json({}, {status:404});
+      if(document.updateTime!==target.searchParams.get('currentDocument.updateTime'))return Response.json({}, {status:412});
+      const fields=JSON.parse(options.body).fields,masks=target.searchParams.getAll('updateMask.fieldPaths');
+      assert.deepEqual(Object.keys(fields).sort(),masks.sort());assert.ok(masks.every(key=>['title','folderId','updatedAt','updatedBy'].includes(key)));
+      const updated=stamp({...document,fields:{...document.fields,...fields}});map.set(id,updated);state.patches.push({id,masks});return Response.json(updated);
+    }
+    if(target.pathname.endsWith('/documents:commit')){
+      assert.equal(options.headers.Authorization,'Bearer server-token');if(state.updateDenied)return Response.json({error:{}},{status:403});
+      const writes=JSON.parse(options.body).writes;
+      for(const write of writes){const id=write.update.name.split('/').pop();assert.deepEqual(write.updateMask.fieldPaths.sort(),['folderId','updatedAt','updatedBy'].sort());if(docs.get(id)?.updateTime!==write.currentDocument.updateTime)return Response.json({}, {status:412});}
+      for(const write of writes){const id=write.update.name.split('/').pop(),document=docs.get(id);docs.set(id,stamp({...document,fields:{...document.fields,...write.update.fields}}));}
+      return Response.json({writeResults:writes.map(()=>({updateTime:'committed'}))});
+    }
+    if(folderId)return folders.has(folderId)?Response.json(folders.get(folderId)):Response.json({}, {status:404});
     const id=target.pathname.match(/\/documents\/album\/([^/]+)$/)?.[1];
     if(id)return docs.has(id)?Response.json(docs.get(id)):Response.json({error:{}},{status:404});
     throw new Error('Unexpected external request: '+url);
@@ -142,3 +171,45 @@ test('range parser and allowed signatures handle suffix ranges and reject active
   assert.throws(()=>parseRange('bytes=0-1,3-4',10));assert.throws(()=>parseRange('bytes=-0',10));
   assert.equal(fileSignatureMatches('image/png',png),true);assert.equal(fileSignatureMatches('image/svg+xml',new TextEncoder().encode('<svg/>')),false);
 });
+test('folder creation/listing/renaming is role checked and idempotent without delete access',()=>runFixture(async({env,state})=>{
+  const id=crypto.randomUUID();
+  assert.equal((await api(env,'/folders',{token:'member',body:{id,title:'練習'}})).status,403);
+  assert.equal((await api(env,'/folders',{token:null,method:'GET'})).status,401);
+  assert.equal((await api(env,'/folders',{body:{id,title:'練習'}})).status,201);
+  assert.equal((await api(env,'/folders',{body:{id,title:'練習'}})).status,200);assert.equal(state.folders.size,1);
+  const list=await api(env,'/folders',{method:'GET',token:'member'});assert.equal(list.status,200);assert.equal((await list.json()).folders[0].title,'練習');
+  const old=state.folders.get(id).updateTime;
+  assert.equal((await api(env,'/folders/'+id,{method:'PATCH',body:{title:'大会',updateTime:old}})).status,200);
+  assert.equal(state.folders.get(id).fields.title.stringValue,'大会');
+  assert.equal((await api(env,'/folders/'+id,{method:'PATCH',body:{title:'競合',updateTime:old}})).status,409);
+  assert.equal((await api(env,'/folders/'+id,{method:'DELETE'})).status,404);
+}));
+test('legacy photo titles and folder membership can change both ways without changing the photo or its timestamp',()=>runFixture(async({env,state})=>{
+  const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'大会'}});
+  const original=structuredClone(state.docs.get('legacy-photo').fields);
+  assert.equal((await api(env,'/media/legacy-photo',{token:'member',method:'PATCH',body:{title:'不可',folderId:id}})).status,403);
+  assert.equal((await api(env,'/media/legacy-photo',{method:'PATCH',body:{title:'集合写真',folderId:id}})).status,200);
+  let fields=state.docs.get('legacy-photo').fields;assert.equal(fields.title.stringValue,'集合写真');assert.equal(fields.folderId.stringValue,id);
+  assert.deepEqual(fields.url,original.url);assert.deepEqual(fields.createdAt,original.createdAt);
+  assert.equal((await api(env,'/media/legacy-photo',{method:'PATCH',body:{folderId:''}})).status,200);
+  fields=state.docs.get('legacy-photo').fields;assert.equal(fields.folderId.stringValue,'');assert.equal(fields.title.stringValue,'集合写真');assert.deepEqual(fields.url,original.url);
+  for(const body of [{url:'bad'},{source:'bad'},{objectKey:'bad'},{title:''},{folderId:'../bad'}])assert.equal((await api(env,'/media/legacy-photo',{method:'PATCH',body})).status,400);
+  assert.equal((await api(env,'/media/missing',{method:'PATCH',body:{title:'missing'}})).status,404);
+  assert.equal(env.MEDIA.objects.size,0);
+}));
+test('bulk moves are atomic per batch, preserve titles, reject duplicates and support returning to photos',()=>runFixture(async({env,state})=>{
+  const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'まとめ'}});
+  state.docs.set('second',{fields:{title:{stringValue:'別写真'},url:{stringValue:'keep'}},updateTime:'second-1'});
+  assert.equal((await api(env,'/media/move',{token:'member',body:{ids:['legacy-photo'],folderId:id}})).status,403);
+  assert.equal((await api(env,'/media/move',{body:{ids:['legacy-photo','missing'],folderId:id}})).status,404);assert.equal(state.docs.get('legacy-photo').fields.folderId,undefined);
+  assert.equal((await api(env,'/media/move',{body:{ids:['legacy-photo','legacy-photo'],folderId:id}})).status,400);
+  assert.equal((await api(env,'/media/move',{body:{ids:['legacy-photo','second'],folderId:id}})).status,200);
+  assert.equal(state.docs.get('second').fields.title.stringValue,'別写真');assert.equal(state.docs.get('legacy-photo').fields.folderId.stringValue,id);
+  assert.equal((await api(env,'/media/move',{body:{ids:['legacy-photo','second'],folderId:''}})).status,200);assert.equal(state.docs.get('second').fields.folderId.stringValue,'');
+}));
+test('upload destinations are validated before creating R2 objects; new IAM failures are actionable',()=>runFixture(async({env,state})=>{
+  assert.equal((await api(env,'/uploads',{body:{name:'x.png',title:'',size:png.length,type:'image/png',folderId:crypto.randomUUID()}})).status,404);assert.equal(env.MEDIA.objects.size,0);
+  const id=crypto.randomUUID();await api(env,'/folders',{body:{id,title:'保存先'}});const upload=await start(env,{folderId:id});await finish(env,upload,[await put(env,upload)]);assert.equal(state.docs.get(upload.id).fields.folderId.stringValue,id);
+  state.updateDenied=true;const denied=await api(env,'/media/legacy-photo',{method:'PATCH',body:{title:'編集'}});assert.equal(denied.status,503);assert.equal((await denied.json()).error,'metadata_permissions_required');
+  state.listDenied=true;assert.equal((await api(env,'/folders',{method:'GET'})).status,503);
+}));

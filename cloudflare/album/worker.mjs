@@ -1,5 +1,5 @@
 // Private album API. R2 access uses a binding; Firebase credentials stay in
-// Worker secrets. No existing album document is overwritten or deleted.
+// Worker secrets. Media edits use field masks; photo/video bodies are untouched.
 export const PART_BYTES = 8 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
@@ -46,7 +46,11 @@ async function bytes(request, maximum) {
   return result;
 }
 async function readJson(request, maximum = 16384) {
-  try { return JSON.parse(new TextDecoder().decode(await bytes(request, maximum))); }
+  try {
+    const input = JSON.parse(new TextDecoder().decode(await bytes(request, maximum)));
+    if (!input || typeof input !== 'object' || Array.isArray(input)) fail(400,'invalid_json');
+    return input;
+  }
   catch (error) { if (error instanceof ApiError) throw error; fail(400, 'invalid_json'); }
 }
 async function upstream(url, options) {
@@ -95,6 +99,7 @@ async function adminToken(env) {
 }
 function metadataFields(session) {
   const values = {title:session.title,originalFilename:session.name,mimeType:session.type,mediaType:session.type.startsWith('video/')?'video':'image',source:'r2',objectKey:session.key,uploadedBy:session.uid,createdAt:session.createdAt,size:session.size};
+  if (session.folderId) values.folderId = session.folderId;
   return Object.fromEntries(Object.entries(values).map(([key,value])=>[key, typeof value === 'number'?{integerValue:String(value)}:{stringValue:value}]));
 }
 async function createMetadata(session, env) {
@@ -105,6 +110,103 @@ async function createMetadata(session, env) {
     const fields = existing.ok ? (await existing.json()).fields : null;
     if (fields?.source?.stringValue !== 'r2' || fields?.objectKey?.stringValue !== session.key || fields?.uploadedBy?.stringValue !== session.uid) fail(409,'metadata_conflict');
   } else if (!response.ok) fail(503, 'metadata_unavailable');
+}
+function documentId(value) {
+  if (typeof value !== 'string' || !value || value.length > 200 || /[\x00-\x1f/]/.test(value) || value === '.' || value === '..') fail(400,'invalid_item');
+  return encodeURIComponent(value);
+}
+function metadataTitle(value) {
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 120) fail(400,'invalid_title');
+  return value.trim();
+}
+async function metadataRequest(env, path, options = {}) {
+  const token = await adminToken(env);
+  const response = await upstream(`${database(env)}${path}`, {...options, headers:{...options.headers, Authorization:`Bearer ${token}`, 'Content-Type':'application/json'}});
+  if (response.status === 403) fail(503,'metadata_permissions_required');
+  return response;
+}
+function folderData(document) {
+  return {id:document.name.split('/').pop(),title:document.fields?.title?.stringValue || 'フォルダ',updateTime:document.updateTime};
+}
+async function checkFolder(env, id) {
+  if (id === '') return;
+  if (typeof id !== 'string' || !UUID.test(id)) fail(400,'invalid_folder');
+  const response = await metadataRequest(env, `/albumFolders/${id}`);
+  if (response.status === 404) fail(404,'folder_not_found');
+  if (!response.ok) fail(503,'metadata_unavailable');
+}
+async function listFolders(request, env) {
+  const pageToken = new URL(request.url).searchParams.get('pageToken') || '';
+  if (pageToken.length > 4096) fail(400,'invalid_page');
+  const params = new URLSearchParams({pageSize:'100'});if (pageToken) params.set('pageToken',pageToken);
+  const response = await metadataRequest(env, `/albumFolders?${params}`);
+  if (!response.ok) fail(503,'metadata_unavailable');
+  const result = await response.json();
+  return json({folders:(result.documents || []).map(folderData),nextPageToken:result.nextPageToken || ''});
+}
+async function createFolder(request, env, user) {
+  const input = await readJson(request), title = metadataTitle(input.title);
+  if (!UUID.test(input.id || '') || Object.keys(input).some(key=>!['id','title'].includes(key))) fail(400,'invalid_folder');
+  const fields = {title:{stringValue:title},createdAt:{integerValue:String(Date.now())},createdBy:{stringValue:user.uid}};
+  const response = await metadataRequest(env, `/albumFolders?documentId=${input.id}`, {method:'POST',body:JSON.stringify({fields})});
+  if (response.status === 409) {
+    const existing = await metadataRequest(env, `/albumFolders/${input.id}`);
+    const document = existing.ok ? await existing.json() : null;
+    if (document?.fields?.createdBy?.stringValue !== user.uid || document?.fields?.title?.stringValue !== title) fail(409,'metadata_conflict');
+    return json(folderData(document));
+  }
+  if (!response.ok) fail(503,'metadata_unavailable');
+  return json(folderData(await response.json()),201);
+}
+async function editableMedia(env, user, id) {
+  const response = await upstream(`${database(env)}/album/${documentId(id)}`, {headers:{Authorization:`Bearer ${user.token}`}});
+  if (response.status === 404) fail(404,'media_not_found');
+  if (!response.ok) fail(response.status >= 500 ? 503 : 403,'access_denied');
+  const document = await response.json();
+  if (!document.updateTime) fail(503,'metadata_unavailable');
+  return document;
+}
+async function patchFields(env, path, fields, updateTime) {
+  const params = new URLSearchParams({'currentDocument.updateTime':updateTime});
+  Object.keys(fields).forEach(key=>params.append('updateMask.fieldPaths',key));
+  const response = await metadataRequest(env, `${path}?${params}`, {method:'PATCH',body:JSON.stringify({fields})});
+  if ([409,412].includes(response.status)) fail(409,'metadata_conflict');
+  if (!response.ok) fail(503,'metadata_unavailable');
+  return response.json();
+}
+async function renameFolder(request, env, user, id) {
+  if (!UUID.test(id)) fail(400,'invalid_folder');
+  const input = await readJson(request), title = metadataTitle(input.title);
+  if (Object.keys(input).some(key=>!['title','updateTime'].includes(key))) fail(400,'invalid_folder');
+  const response = await metadataRequest(env, `/albumFolders/${id}`);
+  if (response.status === 404) fail(404,'folder_not_found');
+  if (!response.ok) fail(503,'metadata_unavailable');
+  const document = await response.json();
+  if (input.updateTime && input.updateTime !== document.updateTime) fail(409,'metadata_conflict');
+  const updated = await patchFields(env, `/albumFolders/${id}`, {title:{stringValue:title},updatedAt:{integerValue:String(Date.now())},updatedBy:{stringValue:user.uid}}, document.updateTime);
+  return json(folderData(updated));
+}
+async function editMedia(request, env, user, id) {
+  const input = await readJson(request);
+  if (!input || !Object.keys(input).length || Object.keys(input).some(key=>!['title','folderId'].includes(key))) fail(400,'invalid_edit');
+  const fields = {updatedAt:{integerValue:String(Date.now())},updatedBy:{stringValue:user.uid}};
+  if ('title' in input) fields.title = {stringValue:metadataTitle(input.title)};
+  if ('folderId' in input) { await checkFolder(env,input.folderId);fields.folderId = {stringValue:input.folderId}; }
+  const document = await editableMedia(env,user,id);
+  const updated = await patchFields(env, `/album/${documentId(id)}`, fields, document.updateTime);
+  return json({id,title:updated.fields?.title?.stringValue || '',folderId:updated.fields?.folderId?.stringValue || ''});
+}
+async function moveMedia(request, env, user) {
+  const input = await readJson(request);
+  if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > 24 || new Set(input.ids).size !== input.ids.length || Object.keys(input).some(key=>!['ids','folderId'].includes(key))) fail(400,'invalid_selection');
+  input.ids.forEach(documentId);await checkFolder(env,input.folderId);
+  const documents = await Promise.all(input.ids.map(id=>editableMedia(env,user,id)));
+  const fields = {folderId:{stringValue:input.folderId},updatedAt:{integerValue:String(Date.now())},updatedBy:{stringValue:user.uid}};
+  const writes = documents.map((document,i)=>({update:{name:`projects/${project(env)}/databases/(default)/documents/album/${input.ids[i]}`,fields},updateMask:{fieldPaths:Object.keys(fields)},currentDocument:{updateTime:document.updateTime}}));
+  const response = await metadataRequest(env, ':commit', {method:'POST',body:JSON.stringify({writes})});
+  if ([409,412].includes(response.status)) fail(409,'metadata_conflict');
+  if (!response.ok) fail(503,'metadata_unavailable');
+  return json({ids:input.ids,folderId:input.folderId});
 }
 async function sessionFor(id, user, env) {
   if (!UUID.test(id)) fail(404, 'upload_not_found');
@@ -140,11 +242,12 @@ export function fileSignatureMatches(type, data) {
 }
 async function createUpload(request, env, user) {
   const input = await readJson(request); validateFile(input);
+  const folderId = input.folderId ?? '';await checkFolder(env,folderId);
   // Fail before creating an R2 upload if metadata credentials are not usable.
   await adminToken(env);
   const id = crypto.randomUUID(), key = mediaKey(id);
   const upload = await env.MEDIA.createMultipartUpload(key, {httpMetadata:{contentType:input.type,cacheControl:'private, no-store'},customMetadata:{albumId:id,uploadedBy:user.uid}});
-  const session = {id,key,uploadId:upload.uploadId,uid:user.uid,type:input.type,size:input.size,name:input.name,title:input.title.trim() || input.name,createdAt:Date.now()};
+  const session = {id,key,uploadId:upload.uploadId,uid:user.uid,type:input.type,size:input.size,name:input.name,title:input.title.trim() || input.name,createdAt:Date.now(),folderId};
   try { await env.MEDIA.put(sessionKey(id), JSON.stringify(session), {httpMetadata:{contentType:'application/json'}}); }
   catch (error) { await upload.abort().catch(()=>{}); throw error; }
   return json({id,partSize:PART_BYTES,partCount:Math.ceil(input.size/PART_BYTES)},201);
@@ -231,11 +334,18 @@ async function serveMedia(request,env,id) {
 async function route(request,env) {
   if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
-  if (path==='/health' && request.method==='GET')return json({ready:true});
+  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
-  const write=path.startsWith('/uploads');
+  const write=!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path));
   const user=await authenticate(request,env,write);
+  if(path==='/folders'&&request.method==='GET')return listFolders(request,env);
+  if(path==='/folders'&&request.method==='POST')return createFolder(request,env,user);
+  const folder=path.match(/^\/folders\/([^/]+)$/);
+  if(folder&&request.method==='PATCH')return renameFolder(request,env,user,folder[1]);
+  if(path==='/media/move'&&request.method==='POST')return moveMedia(request,env,user);
+  const edit=path.match(/^\/media\/([^/]+)$/);
+  if(edit&&request.method==='PATCH')return editMedia(request,env,user,decodeURIComponent(edit[1]));
   if(path==='/uploads'&&request.method==='POST')return createUpload(request,env,user);
   const part=path.match(/^\/uploads\/([^/]+)\/parts\/(\d+)$/);
   if(part&&request.method==='PUT')return uploadPart(request,env,user,part[1],part[2]);
@@ -265,7 +375,7 @@ export default {
     headers.set('Cache-Control','private, no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','no-referrer');
     if(origin===allowed) {
       headers.set('Access-Control-Allow-Origin',allowed);headers.set('Vary','Origin');
-      headers.set('Access-Control-Allow-Methods','GET, HEAD, POST, PUT, DELETE, OPTIONS');
+      headers.set('Access-Control-Allow-Methods','GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
       headers.set('Access-Control-Allow-Headers','Authorization, Content-Type, Range');
       headers.set('Access-Control-Expose-Headers','Content-Range, Content-Length, Accept-Ranges');
       headers.set('Access-Control-Max-Age','300');

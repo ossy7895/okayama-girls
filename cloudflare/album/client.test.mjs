@@ -24,14 +24,22 @@ class Element {
 }
 function fixture(){
   const elements=new Map();const document={activeElement:null,getElementById(id){if(!elements.has(id))elements.set(id,new Element('div',document));return elements.get(id);},createElement(tag){return new Element(tag,document);}};
-  const state={docs:[],queries:[],requests:[],created:[],completed:new Set(),chunks:[],failName:'',refreshes:[],next:1};
+  const state={docs:[],folders:[],backend:true,queries:[],requests:[],created:[],completed:new Set(),chunks:[],failName:'',refreshes:[],next:1};
   const user={uid:'admin',getIdToken:async force=>{state.refreshes.push(force);return 'firebase-test-token';}};
-  const context={document,appScreen:document.getElementById('app-screen'),auth:{currentUser:user},currentRole:'admin',db:{},AbortController,DOMException,URL,Response,Blob,console,setTimeout:work=>queueMicrotask(work),
-    collection:(db,path)=>path,orderBy:(key,direction)=>({key,direction}),limit:n=>({limit:n}),startAfter:doc=>({after:doc.id}),query:(path,...clauses)=>({path,clauses}),
-    getDocs:async query=>{state.queries.push(query);const after=query.clauses.find(c=>c.after)?.after;const from=after?state.docs.findIndex(d=>d.id===after)+1:0;const count=query.clauses.find(c=>c.limit)?.limit??24;return {docs:state.docs.slice(from,from+count).map(d=>({id:d.id,data:()=>d}))};},
+  const context={document,appScreen:document.getElementById('app-screen'),auth:{currentUser:user},currentRole:'admin',db:{},AbortController,DOMException,URL,Response,Blob,crypto,console,setTimeout:work=>queueMicrotask(work),
+    collection:(db,path)=>path,orderBy:(key,direction)=>({key,direction}),where:(key,operator,value)=>({where:key,value}),limit:n=>({limit:n}),startAfter:doc=>({after:doc.id}),query:(path,...clauses)=>({path,clauses}),
+    getDocs:async query=>{state.queries.push(query);const filter=query.clauses.find(c=>c.where);const docs=filter?state.docs.filter(d=>d[filter.where]===filter.value):state.docs;const after=query.clauses.find(c=>c.after)?.after;const from=after?docs.findIndex(d=>d.id===after)+1:0;const count=query.clauses.find(c=>c.limit)?.limit??24;return {docs:docs.slice(from,from+count).map(d=>({id:d.id,data:()=>d}))};},
     fetch:async(url,options)=>{
       state.requests.push({url,options});assert.equal(options.headers.Authorization,'Bearer firebase-test-token');
       const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):null;
+      if(path==='/folders'){
+        if(!state.backend)return Response.json({error:'not_found'},{status:404});
+        if(options.method==='GET')return Response.json({folders:state.folders,nextPageToken:''});
+        const folder={...body,updateTime:'folder-v1'};state.folders.push(folder);return Response.json(folder,{status:201});
+      }
+      if(path.startsWith('/folders/')&&options.method==='PATCH'){const folder=state.folders.find(f=>f.id===path.split('/').pop());folder.title=body.title;return Response.json(folder);}
+      if(path==='/media/move'){for(const id of body.ids)state.docs.find(d=>d.id===id).folderId=body.folderId;return Response.json({ids:body.ids,folderId:body.folderId});}
+      if(path.startsWith('/media/')&&options.method==='PATCH'){const item=state.docs.find(d=>d.id===path.split('/').pop());Object.assign(item,body);return Response.json(item);}
       if(path==='/uploads'){
         const id='upload-'+state.next++;state.created.push({id,...body});return Response.json({id,partSize:4,partCount:Math.ceil(body.size/4)},{status:201});
       }
@@ -39,7 +47,7 @@ function fixture(){
       if(complete){
         const upload=state.created.find(u=>u.id===complete[1]);
         if(upload.name===state.failName)return Response.json({error:'metadata_unavailable'},{status:503});
-        if(!state.completed.has(upload.id)){state.completed.add(upload.id);state.docs.push({id:upload.id,title:upload.title||upload.name,source:'r2',mediaType:'image',createdAt:Date.now()});}
+        if(!state.completed.has(upload.id)){state.completed.add(upload.id);state.docs.push({id:upload.id,title:upload.title||upload.name,source:'r2',mediaType:'image',createdAt:Date.now(),folderId:upload.folderId||''});}
         return Response.json({id:upload.id});
       }
       if(path.endsWith('/access'))return Response.json({url:'https://album.example/objects/test?signature=short-lived-ticket',expiresAt:Date.now()+900000});
@@ -79,8 +87,42 @@ test('gallery pagination retains existing data and renders document text without
 test('a late gallery response after logout cannot reinsert private photos',async()=>{
   const {context,element}=fixture();let resolve;
   context.getDocs=()=>new Promise(done=>{resolve=done;});
-  const loading=context.loadAlbum();context.auth.currentUser=null;context.resetAlbum();
+  const loading=context.loadAlbum();for(let i=0;i<10&&!resolve;i++)await new Promise(setImmediate);assert.ok(resolve);context.auth.currentUser=null;context.resetAlbum();
   resolve({docs:[{id:'private',data:()=>({title:'private'})}]});await loading;assert.equal(element('album-gallery').children.length,0);
+});
+test('photo and folder tabs are exclusive even when the first page consists entirely of folder items',async()=>{
+  const {context,state,element}=fixture();state.folders=[{id:'folder-a',title:'練習'}];
+  state.docs=Array.from({length:30},(_,i)=>({id:'grouped-'+i,title:'フォルダ写真'+i,folderId:'folder-a',createdAt:100-i}));
+  state.docs.push({id:'loose',title:'単体写真',url:'data:image/jpeg;base64,/9j/AA==',createdAt:1});
+  await context.loadAlbum();assert.equal(element('album-gallery').children.length,1);assert.ok(element('album-gallery').textContent.includes('単体写真'));assert.ok(!element('album-gallery').textContent.includes('フォルダ写真'));
+  await context.setAlbumView('folders','folder-a');assert.equal(element('album-gallery').children.length,24);assert.ok(!element('album-gallery').textContent.includes('単体写真'));
+  await context.loadAlbum(true);assert.equal(element('album-gallery').children.length,30);
+  await context.setAlbumView('photos');assert.equal(element('album-gallery').children.length,1);
+});
+test('title and destination edits move a legacy photo into a folder, between folders, and back without duplication',async()=>{
+  const {context,state,element}=fixture();state.folders=[{id:'a',title:'練習'},{id:'b',title:'大会'}];const url='data:image/jpeg;base64,/9j/AA==';state.docs=[{id:'legacy',title:'元のタイトル',url,createdAt:1}];
+  await context.loadAlbum();context.openAlbumEditor('item',state.docs[0],element('edit'));
+  element('album-editor-title').value='変更したタイトル';element('album-editor-folder').value='a';await context.saveAlbumEditor();assert.equal(element('album-gallery').children.length,0);assert.equal(state.docs[0].title,'変更したタイトル');
+  await context.setAlbumView('folders','a');assert.equal(element('album-gallery').children.length,1);
+  context.openAlbumEditor('item',state.docs[0],element('edit'));element('album-editor-folder').value='b';await context.saveAlbumEditor();assert.equal(element('album-gallery').children.length,0);
+  await context.setAlbumView('folders','b');assert.equal(element('album-gallery').children.length,1);
+  context.openAlbumEditor('item',state.docs[0],element('edit'));element('album-editor-folder').value='';await context.saveAlbumEditor();assert.equal(element('album-gallery').children.length,0);
+  await context.setAlbumView('photos');assert.equal(element('album-gallery').children.length,1);assert.equal(state.docs.length,1);assert.equal(state.docs[0].url,url);assert.equal(state.docs[0].createdAt,1);
+});
+test('folders can be created and renamed; members see folders without editing controls',async()=>{
+  const {context,state,element}=fixture();await context.setAlbumView('folders');context.openAlbumEditor('create',null,element('create'));element('album-editor-title').value='新しいフォルダ';await context.saveAlbumEditor();assert.equal(state.folders.length,1);
+  context.openAlbumEditor('folder',state.folders[0],element('rename'));element('album-editor-title').value='変更後';await context.saveAlbumEditor();assert.equal(state.folders[0].title,'変更後');assert.ok(element('album-folder-list').textContent.includes('変更後'));
+  context.currentRole='member';await context.setAlbumView('folders');assert.equal(element('album-create-folder').classList.contains('hidden'),true);assert.equal(element('album-folder-list').children[0].children.length,1);
+  context.openAlbumEditor('create',null,element('create'));assert.equal(element('album-editor-modal').classList.contains('hidden'),true);
+});
+test('multiple selected photos move as a batch and disappear from the ungrouped tab',async()=>{
+  const {context,state,element,click}=fixture();state.folders=[{id:'a',title:'まとめ'}];state.docs=[{id:'one',title:'一枚目'},{id:'two',title:'二枚目'}];await context.loadAlbum();
+  for(const card of element('album-gallery').children){const box=card.children[1];box.checked=true;for(const handler of box.listeners.change)handler();}
+  await click('album-move-selected');element('album-editor-folder').value='a';await context.saveAlbumEditor();assert.equal(element('album-gallery').children.length,0);assert.ok(state.docs.every(d=>d.folderId==='a'));
+  assert.equal(state.requests.filter(r=>r.url.endsWith('/media/move')).length,1);
+});
+test('an older Worker keeps legacy viewing available and hides unsupported editing instead of making fake changes',async()=>{
+  const {context,state,element}=fixture();state.backend=false;state.docs=[{id:'old',title:'既存写真'}];await context.loadAlbum();assert.equal(element('album-gallery').children.length,1);assert.equal(element('album-gallery').children[0].children.length,1);assert.equal(element('album-selection-bar').classList.contains('hidden'),true);assert.ok(element('album-feature-status').textContent.includes('サーバー更新待ち'));
 });
 test('photos and videos are viewed with header-authenticated ticket requests, not Firebase tokens in URLs',async()=>{
   const {context,state,element}=fixture();const button=element('example-card');
