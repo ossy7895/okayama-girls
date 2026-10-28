@@ -459,8 +459,8 @@ async function feeRoute(request,env,user,path) {
   if(path==='/fees'&&request.method==='GET'){
     const cursor=new URL(request.url).searchParams.get('cursor')||'';if(cursor.length>4096)fail(400,'invalid_page');
     const page=await env.MEDIA.list({prefix:FEE_PREFIX,limit:25,...(cursor?{cursor}:{})});
-    const ledgers=(await Promise.all(page.objects.map(async item=>{const object=await env.MEDIA.get(item.key);return object?object.json():null;}))).filter(Boolean);
-    return json({ledgers,nextCursor:page.truncated?page.cursor:'',features:{feeLedger:true}});
+    const ledgers=(await Promise.all(page.objects.map(async item=>{const object=await env.MEDIA.get(item.key);return object?object.json():null;}))).filter(ledger=>ledger&&!ledger.deletedAt);
+    return json({ledgers,nextCursor:page.truncated?page.cursor:'',features:{feeLedger:true,feeLedgerEditing:true}});
   }
   if(path==='/fees'&&request.method==='POST'){
     const input=await readJson(request);feeKeys(input,['id','title','amount','dueDate','memberIds']);
@@ -469,7 +469,7 @@ async function feeRoute(request,env,user,path) {
     if(!Array.isArray(ids)||!ids.length||ids.length>100||new Set(ids).size!==ids.length)fail(400,'invalid_fee');ids.forEach(documentId);
     const requestKey=JSON.stringify({title,amount,dueDate,memberIds:[...ids].sort()});
     const existing=await env.MEDIA.get(FEE_PREFIX+id+'.json');
-    if(existing){const saved=await existing.json();if(saved.createdBy===user.uid&&saved.requestKey===requestKey)return json(saved);fail(409,'fee_conflict');}
+    if(existing){const saved=await existing.json();if(saved.deletedAt)fail(410,'fee_deleted');if(saved.createdBy===user.uid&&saved.requestKey===requestKey)return json(saved);fail(409,'fee_conflict');}
     const members=[];
     for(let offset=0;offset<ids.length;offset+=8){
       const chunk=await Promise.all(ids.slice(offset,offset+8).map(async memberId=>{
@@ -480,19 +480,50 @@ async function feeRoute(request,env,user,path) {
     const ledger={id,title,amount,dueDate,members,payments:[],closed:false,createdAt:Date.now(),createdBy:user.uid,requestKey};
     try{return json(await writeFee(env,ledger),201);}catch(error){
       if(error.message!=='fee_conflict')throw error;
-      const {ledger:saved}=await readFee(env,id);if(saved.createdBy===user.uid&&saved.requestKey===requestKey)return json(saved);throw error;
+      const {ledger:saved}=await readFee(env,id);if(saved.deletedAt)fail(410,'fee_deleted');if(saved.createdBy===user.uid&&saved.requestKey===requestKey)return json(saved);throw error;
     }
   }
-  const match=path.match(/^\/fees\/([^/]+)\/(payments|voids|status)$/);
+  const deletion=path.match(/^\/fees\/([^/]+)$/);
+  if(deletion&&request.method==='DELETE'){
+    const {ledger,etag}=await readFee(env,deletion[1]),input=await readJson(request);feeKeys(input,['version']);
+    if(typeof input.version!=='string'||!input.version)fail(400,'invalid_fee');
+    if(ledger.deletedAt)return json(ledger);
+    if(input.version!==ledger.version)fail(409,'fee_conflict');
+    Object.assign(ledger,{deletedAt:Date.now(),deletedBy:user.uid,updatedBy:user.uid});
+    return json(await writeFee(env,ledger,etag));
+  }
+  const match=path.match(/^\/fees\/([^/]+)\/(payments|voids|status|member-state)$/);
   if(!match||request.method!=='POST')fail(404,'not_found');
   const {ledger,etag}=await readFee(env,match[1]),input=await readJson(request);
-  if(match[2]==='payments'){
+  if(ledger.deletedAt)fail(410,'fee_deleted');
+  if(match[2]==='member-state'){
+    feeKeys(input,['id','memberId','paid','paidOn','version']);feeUUID(input.id);documentId(input.memberId);feeDate(input.paidOn);
+    if(typeof input.paid!=='boolean')fail(400,'invalid_fee');
+    if(!ledger.members.some(m=>m.memberId===input.memberId))fail(400,'fee_member_not_found');
+    const changes=ledger.stateChanges||[],prior=changes.find(change=>change.id===input.id);
+    if(prior){if(prior.memberId===input.memberId&&prior.paid===input.paid&&prior.paidOn===input.paidOn&&prior.recordedBy===user.uid)return json(ledger);fail(409,'fee_conflict');}
+    if(ledger.payments.some(payment=>payment.id===input.id))fail(409,'fee_conflict');
+    if(input.version!==ledger.version)fail(409,'fee_conflict');
+    if(ledger.closed)fail(409,'fee_closed');
+    const balance=feeBalance(ledger,input.memberId);
+    if((input.paid&&balance===0)||(!input.paid&&balance===ledger.amount))return json(ledger);
+    if(changes.length>=500||(input.paid&&ledger.payments.length>=500))fail(400,'fee_limit');
+    const now=Date.now();
+    if(input.paid){
+      if(balance<0)fail(409,'fee_conflict');
+      ledger.payments.push({id:input.id,memberId:input.memberId,amount:balance,paidOn:input.paidOn,method:'その他',memo:'状態タップで入金済みに変更',recordedAt:now,recordedBy:user.uid});
+    }else{
+      for(const payment of ledger.payments.filter(p=>p.memberId===input.memberId&&!p.voidedAt))Object.assign(payment,{voidedAt:now,voidedBy:user.uid,voidReason:'状態タップで未入金に変更'});
+    }
+    ledger.stateChanges=[...changes,{id:input.id,memberId:input.memberId,paid:input.paid,paidOn:input.paidOn,recordedAt:now,recordedBy:user.uid}];
+  }else if(match[2]==='payments'){
     feeKeys(input,['id','memberId','amount','paidOn','method','memo','version']);feeUUID(input.id);documentId(input.memberId);feeAmount(input.amount);feeDate(input.paidOn);
     if(!['現金','振込','その他'].includes(input.method))fail(400,'invalid_fee');const memo=feeString(input.memo,300,true);
     if(!ledger.members.some(m=>m.memberId===input.memberId))fail(400,'fee_member_not_found');
     const payment={id:input.id,memberId:input.memberId,amount:input.amount,paidOn:input.paidOn,method:input.method,memo,recordedAt:Date.now(),recordedBy:user.uid};
     const prior=ledger.payments.find(p=>p.id===payment.id);
     if(prior){if(['memberId','amount','paidOn','method','memo','recordedBy'].every(key=>prior[key]===payment[key]))return json(ledger);fail(409,'fee_conflict');}
+    if((ledger.stateChanges||[]).some(change=>change.id===input.id))fail(409,'fee_conflict');
     if(ledger.closed)fail(409,'fee_closed');if(ledger.payments.length>=500)fail(400,'fee_limit');
     if(payment.amount>feeBalance(ledger,input.memberId))fail(400,'fee_overpayment');
     ledger.payments.push(payment);
@@ -512,7 +543,7 @@ async function feeRoute(request,env,user,path) {
 async function route(request,env) {
   if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
-  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true}});
+  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
   const write=path.endsWith('/delete-preview')||(!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path)));
