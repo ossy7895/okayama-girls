@@ -31,7 +31,7 @@ function fixture({half='表',side='先攻',outs=0,connected=true}={}){
  const initial={inning:1,half,score:0,balls:0,strikes:0,outs,selectedPosition:'',selectedBallResult:null,bases:{first:null,second:null,third:null},lastBatterSerial:0,logs:[]};
  const parentDoc=dom(),childWindow={},handlers={};
  const liveState={inning:1,half,ball:0,strike:0,out:outs,logs:[],inningScores:{team:{},opponent:{}},battingOrder:members.map(m=>m.id),battingIndex:0,batterId:'p1',pitcherId:'p9',fieldingPositions:{p9:'投'},teamScore:0,opponentScore:0};
- const p={liveGameId:"test-game",document:parentDoc,liveState,currentMembers:members,currentLiveSide:side,cloneLiveState:x=>JSON.parse(JSON.stringify(x)),window:{addEventListener:(type,f)=>(handlers[type]??=[]).push(f)},setTimeout:f=>{tasks.push(f);return tasks.length;},requestAnimationFrame:()=>{},console,isStaffMember:()=>false,updateLiveUI(){},markLiveChanged(){},saveLiveGame:()=>{p.saved=JSON.parse(JSON.stringify(liveState));},moveToScoreCell(){}};
+ const p={scoreMembers:()=>members,scheduleLiveBroadcast(){},liveGameId:"test-game",document:parentDoc,liveState,currentMembers:members,currentLiveSide:side,cloneLiveState:x=>JSON.parse(JSON.stringify(x)),window:{addEventListener:(type,f)=>(handlers[type]??=[]).push(f)},setTimeout:f=>{tasks.push(f);return tasks.length;},requestAnimationFrame:()=>{},console,isStaffMember:()=>false,updateLiveUI(){},markLiveChanged(){},saveLiveGame:()=>{p.saved=JSON.parse(JSON.stringify(liveState));},moveToScoreCell(){}};
  const frame=parentDoc.getElementById('live-v98-frame');frame.contentWindow=childWindow;
  childWindow.postMessage=msg=>tasks.push(()=>c.dispatch(msg));
  const c={document,window:{innerWidth:390,addEventListener:(type,f)=>(c.handlers[type]??=[]).push(f),parent:{postMessage:msg=>{messages.push(JSON.parse(JSON.stringify(msg)));tasks.push(()=>{for(const f of handlers.message||[])f({source:childWindow,data:msg});});}}},handlers:{},setTimeout:()=>1,clearTimeout(){},requestAnimationFrame(){},console};
@@ -44,7 +44,7 @@ function fixture({half='表',side='先攻',outs=0,connected=true}={}){
  const bridgeStart=html.indexOf('    // v9.9 bridge:');const bridgeEnd=html.indexOf('    // Keep browsing context',bridgeStart);
  vm.runInContext(html.slice(bridgeStart,bridgeEnd),p);
  Object.assign(c.api.state,initial);
- Object.assign(c.api.siteBridge,{connected,side,members,battingOrder:members.map(m=>m.id),batterId:'p1',pitcherId:'p9',fieldingPositions:{p9:'投'}});
+ Object.assign(c.api.siteBridge,{gameId:'test-game',connected,side,members,battingOrder:members.map(m=>m.id),batterId:'p1',pitcherId:'p9',fieldingPositions:{p9:'投'}});
  function flush(){let n=0;while(tasks.length){if(++n>100)throw Error('message loop');tasks.shift()();}}
  function runner(base,id='p2'){c.api.state.bases[base]={id,name:members.find(m=>m.id===id)?.name||id,team:half==='表'?'self':'opponent'};}
  function ball(kind,dest,outcomes=[]){c.api.state.selectedPosition='中堅';c.api.state.selectedBallResult={kind,label:kind==='hit'?'安打':kind==='error'?'中失':kind==='ground'?'中ゴロ':'中飛'};c.api.beginBatterDestination(dest);for(const to of outcomes)c.api.chooseRunnerOutcome(to);}
