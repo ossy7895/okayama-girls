@@ -18,8 +18,8 @@ function fixture(){
   const r2=new R2(),calls=[];r2.objects.set('album-media/protected',{value:'original',etag:'protected'});r2.objects.set('fee-ledgers/protected',{value:'original',etag:'protected'});
   const env={MEDIA:r2,FIREBASE_WEB_API_KEY:'test',FIREBASE_SERVICE_ACCOUNT:'test-configured-not-a-real-secret',MEDIA_SIGNING_KEY:'test-key-with-at-least-thirty-two-characters',ALLOWED_ORIGIN:ORIGIN};
   globalThis.fetch=async(url,options)=>{
-    calls.push(String(url));if(String(url).includes('accounts:lookup')){const token=JSON.parse(options.body).idToken;return ['admin','member','admin2'].includes(token)?Response.json({users:[{localId:token}]}):Response.json({}, {status:400});}
-    if(/\/users\/(admin|member|admin2)$/.test(String(url)))return Response.json({fields:{role:{stringValue:String(url).endsWith('/member')?'member':'admin'}}});
+    calls.push(String(url));if(String(url).includes('accounts:lookup')){const token=JSON.parse(options.body).idToken;return ['admin','member','admin2','viewer'].includes(token)?Response.json({users:[{localId:token}]}):Response.json({}, {status:400});}
+    if(/\/users\/(admin|member|admin2|viewer)$/.test(String(url)))return Response.json({fields:{role:{stringValue:String(url).endsWith('/viewer')?'viewer':String(url).endsWith('/member')?'member':'admin'}}});
     throw Error('Unexpected remote request');
   };
   const api=(path,{method='GET',body,token='admin',origin=ORIGIN}={})=>worker.fetch(new Request('https://worker.test'+path,{method,headers:{Origin:origin,...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),env);
@@ -27,13 +27,24 @@ function fixture(){
   const edit=(p,extra={})=>({name:p.name,address:p.address,mapUrl:p.mapUrl,version:p.version,operationId:crypto.randomUUID(),...extra});
   return {r2,api,create,edit,calls};
 }
-test('anonymous cannot list, read, or access a photo; members cannot write',async()=>{
-  const f=fixture(),id=crypto.randomUUID();for(const path of ['/places','/places/'+id,'/places/'+id+'/photo'])assert.equal((await f.api(path,{token:''})).status,401);
-  for(const method of ['PUT','DELETE'])assert.equal((await f.api('/places/'+id,{method,body:{},token:'member'})).status,403);assert.equal(f.r2.writes.length,0);
+test('anonymous, expired, and unrecognized roles cannot read or change places',async()=>{
+  const f=fixture(),id=crypto.randomUUID();for(const token of ['', 'expired','viewer']){
+    const expected=token==='viewer'?403:401;
+    for(const path of ['/places','/places/'+id,'/places/'+id+'/photo'])assert.equal((await f.api(path,{token})).status,expected);
+    for(const method of ['PUT','DELETE'])assert.equal((await f.api('/places/'+id,{method,body:{},token})).status,expected);
+  }assert.equal(f.r2.writes.length,0);
+});
+test('members can add, edit another user’s place and photo, and delete places; fees and album stay admin-only',async()=>{
+  const f=fixture(),{id,place}=await f.create();
+  const updated=await f.api('/places/'+id,{token:'member',method:'PUT',body:f.edit(place,{name:'メンバー編集',photo:{type:'image/png',data:png}})});assert.equal(updated.status,200);const current=await updated.json();assert.equal(current.hasPhoto,true);assert.equal(current.name,'メンバー編集');
+  assert.equal((await f.api('/places/'+id+'/photo',{token:'member'})).status,200);
+  const memberId=crypto.randomUUID();assert.equal((await f.api('/places/'+memberId,{token:'member',method:'PUT',body:{name:'メンバー追加',address:'住所',mapUrl:'',version:'',operationId:crypto.randomUUID()}})).status,201);
+  assert.equal((await f.api('/places/'+id,{token:'member',method:'DELETE',body:{version:current.version,operationId:crypto.randomUUID()}})).status,200);assert.equal((await f.api('/places/'+id)).status,404);
+  for(const [path,method] of [['/fees','GET'],['/uploads','POST'],['/folders','POST'],['/media/'+id,'DELETE']])assert.equal((await f.api(path,{token:'member',method,...(method==='GET'?{}:{body:{}})})).status,403);
 });
 test('wrong origin is rejected before authentication; health advertises all existing features',async()=>{
   const f=fixture();assert.equal((await f.api('/places',{origin:'https://evil.test'})).status,403);assert.equal(f.calls.length,0);
-  const h=await(await f.api('/health')).json();for(const key of ['mapPlaces','albumFolders','feeLedgerEditing'])assert.equal(h.features[key],true);
+  const h=await(await f.api('/health')).json();for(const key of ['mapPlaces','mapPlacesSharedEditing','albumFolders','feeLedgerEditing'])assert.equal(h.features[key],true);
 });
 test('member reads private places and no new Firestore collection or credential is used',async()=>{
   const f=fixture(),{place}=await f.create();const result=await f.api('/places',{token:'member'});assert.equal(result.headers.get('Cache-Control'),'private, no-store');assert.equal((await result.json()).places[0].id,place.id);assert.ok(f.calls.every(u=>u.includes('accounts:lookup')||u.includes('/users/')));

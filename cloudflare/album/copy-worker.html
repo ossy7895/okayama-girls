@@ -39,8 +39,8 @@
         const response=await fetch('./worker.mjs?copy='+Date.now(),{cache:'no-store',credentials:'omit'});
         if(!response.ok)throw new Error('load_failed');
         const text=await response.text();
-        if(!text.includes('async function deleteMedia(')||!text.includes('mediaDeletion:true')||!text.includes('feeLedgerEditing:true')||!text.includes('mapPlaces:true')||!text.includes('export default'))throw new Error('unexpected_source');
-        code=text;area.value=text;button.disabled=false;button.textContent='コード全体をコピー';status.textContent='アルバム・入金管理・地図（場所登録と写真）に対応したコードを読み込みました。';
+        if(!text.includes('async function deleteMedia(')||!text.includes('mediaDeletion:true')||!text.includes('feeLedgerEditing:true')||!text.includes('mapPlacesSharedEditing:true')||!text.includes('export default'))throw new Error('unexpected_source');
+        code=text;area.value=text;button.disabled=false;button.textContent='コード全体をコピー';status.textContent='アルバム・入金管理・地図（全員の追加・編集・削除と写真）に対応したコードを読み込みました。';
       }catch{
         status.textContent='コードを読み込めませんでした。このページを再読み込みしてください。';button.textContent='読み込みできませんでした';
       }

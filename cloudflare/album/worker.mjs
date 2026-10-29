@@ -576,7 +576,7 @@ async function placeRoute(request,env,user,path){
     const cursor=new URL(request.url).searchParams.get('cursor')||'';if(cursor.length>4096)fail(400,'invalid_page');
     const page=await env.MEDIA.list({prefix:PLACE_PREFIX,limit:50,...(cursor?{cursor}:{})});
     const places=(await Promise.all(page.objects.map(async item=>{const obj=await env.MEDIA.get(item.key);return obj?obj.json():null;}))).filter(p=>p&&!p.deletedAt).map(placeView);
-    return json({places,nextCursor:page.truncated?page.cursor:'',features:{mapPlaces:true}});
+    return json({places,nextCursor:page.truncated?page.cursor:'',features:{mapPlaces:true,mapPlacesSharedEditing:true}});
   }
   const match=path.match(/^\/places\/([^/]+)(\/photo)?$/);if(!match)fail(404,'not_found');
   const id=placeId(match[1]);
@@ -587,7 +587,7 @@ async function placeRoute(request,env,user,path){
     const photo=await env.MEDIA.get(place.photoKey);if(!photo)fail(404,'place_photo_not_found');
     return new Response(photo.body,{headers:{'Content-Type':photo.httpMetadata?.contentType||'application/octet-stream','Content-Disposition':'inline'}});
   }
-  if(user.role!=='admin')fail(403,'access_denied');
+  if(!['admin','member'].includes(user.role))fail(403,'access_denied');
   if(match[2]||!['PUT','DELETE'].includes(request.method))fail(404,'not_found');
   const input=await readJson(request,7*1024*1024);
   if(Object.keys(input).some(k=>!(request.method==='DELETE'?['version','operationId']:['version','operationId','name','address','mapUrl','photo','removePhoto']).includes(k)))fail(400,'invalid_place');
@@ -628,12 +628,13 @@ async function placeRoute(request,env,user,path){
 async function route(request,env) {
   if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
-  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true,mapPlaces:true}});
+  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true,mapPlaces:true,mapPlacesSharedEditing:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
+  // Place CRUD is shared by authenticated admins and members only.
+  if(path==='/places'||path.startsWith('/places/'))return placeRoute(request,env,await authenticate(request,env),path);
   const write=path.endsWith('/delete-preview')||(!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path)));
   const user=await authenticate(request,env,write||path==='/fees'||path.startsWith('/fees/'));
-  if(path==='/places'||path.startsWith('/places/'))return placeRoute(request,env,user,path);
   if(path==='/fees'||path.startsWith('/fees/'))return feeRoute(request,env,user,path);
   if(path==='/folders'&&request.method==='GET')return listFolders(request,env,user);
   if(path==='/folders'&&request.method==='POST')return createFolder(request,env,user);

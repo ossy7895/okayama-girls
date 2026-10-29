@@ -69,11 +69,15 @@ class R2{
  assert.equal(await page.locator('.place-actions a').getAttribute('href'),'https://maps.app.goo.gl/mock');
  await page.locator('[data-place-delete]').click();await page.waitForFunction(()=>document.getElementById('place-status').textContent.includes('削除しました'));
  assert.equal((await r2.list({prefix:'map-places/'})).objects.length,2); // one live and one tombstone
- // Member UI is read-only, while the Worker authorization is also checked by unit tests.
+ // Members can use all place actions; requests run through the actual Worker.
  await context.addInitScript(()=>window.mockRole='member');await page.reload();await page.locator('#app-screen:not(.hidden)').waitFor();await page.locator('#tab-home [data-tab="map"]').click();await page.locator('[data-place-open]').waitFor();
- assert.equal(await page.locator('#place-add').isVisible(),false);assert.equal(await page.locator('[data-place-edit]').count(),0);assert.equal(await page.locator('[data-place-delete]').count(),0);
+ assert.equal(await page.locator('#place-add').isVisible(),true);assert.equal(await page.locator('[data-place-edit]').count(),1);assert.equal(await page.locator('[data-place-delete]').count(),1);
  await page.locator('[data-place-open]').click();await page.locator('#place-photo-frame img').waitFor();await page.locator('#tab-map').screenshot({path:'/tmp/okayama-map-member.png'});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.locator('[data-place-edit]').click();await page.locator('#place-name').fill('メンバーが変更した球場');await page.locator('#place-form button[type=submit]').click();await page.locator('#place-editor-modal').waitFor({state:'hidden'});assert.equal(await page.locator('.place-card h3').innerText(),'メンバーが変更した球場');
+ await page.locator('#place-add').click();await page.locator('#place-name').fill('メンバー追加の場所');await page.locator('#place-address').fill('岡山市 模擬住所');await page.locator('#place-form button[type=submit]').click();await page.locator('#place-editor-modal').waitFor({state:'hidden'});assert.equal(await page.locator('.place-card h3').innerText(),'メンバー追加の場所');
+ await page.locator('[data-place-delete]').click();await page.waitForFunction(()=>document.getElementById('place-status').textContent.includes('削除しました'));assert.equal(await page.locator('.place-card h3').innerText(),'メンバーが変更した球場');
+
  await page.locator('#logout-button').click();await page.locator('#login-screen:not(.hidden)').waitFor();assert.equal(await page.locator('#place-list').innerHTML(),'');
  assert.deepEqual(errors,[]);console.log('Browser checks passed: real HTML + Worker, mobile viewport, CRUD, original photo, Google links, ID/name navigation, event selection, member permissions, logout.');console.log(JSON.stringify({mockRequests:requests.length,eventWrites:eventWrites.length,screenshots:['/tmp/okayama-map-detail.png','/tmp/okayama-map-member.png']}));
  }finally{await browser.close();}
