@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
-  <title>アルバム・入金管理用Workerコードのコピー</title>
+  <title>アルバム・入金管理・地図用Workerコードのコピー</title>
   <style>
     *{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#172033;font-family:system-ui,-apple-system,sans-serif;line-height:1.7}main{max-width:620px;margin:0 auto;padding:28px 18px}section{background:white;border-radius:20px;padding:24px;box-shadow:0 3px 20px #1420330b}h1{font-size:21px;line-height:1.5;margin:0 0 12px}p{font-size:14px;margin:12px 0}button{width:100%;border:0;border-radius:13px;min-height:58px;padding:14px;background:#c8102e;color:white;font-size:17px;font-weight:800;cursor:pointer}button:disabled{background:#9ca3af;cursor:wait}#status{min-height:48px;font-size:14px;font-weight:700;overflow-wrap:anywhere}.hint{color:#667085;font-size:12px}textarea{width:100%;min-height:190px;font-size:12px;line-height:1.5;border:1px solid #ccd2dd;border-radius:10px;padding:10px}details{margin-top:20px}summary{font-size:13px;cursor:pointer}a{color:#b10e29}
   </style>
 </head>
 <body>
   <main><section>
-    <h1>アルバム・入金管理用Workerコード</h1>
+    <h1>アルバム・入金管理・地図用Workerコード</h1>
     <p>下のボタンを押すと、置き換え用のコード全体をコピーできます。</p>
     <button id="copy" type="button" disabled>コードを読み込み中…</button>
     <p id="status" role="status" aria-live="polite">読み込み中です。</p>
@@ -39,8 +39,8 @@
         const response=await fetch('./worker.mjs?copy='+Date.now(),{cache:'no-store',credentials:'omit'});
         if(!response.ok)throw new Error('load_failed');
         const text=await response.text();
-        if(!text.includes('async function deleteMedia(')||!text.includes('mediaDeletion:true')||!text.includes('feeLedgerEditing:true')||!text.includes('export default'))throw new Error('unexpected_source');
-        code=text;area.value=text;button.disabled=false;button.textContent='コード全体をコピー';status.textContent='アルバムと入金管理（入金枠の削除・状態切替）に対応したコードを読み込みました。';
+        if(!text.includes('async function deleteMedia(')||!text.includes('mediaDeletion:true')||!text.includes('feeLedgerEditing:true')||!text.includes('mapPlaces:true')||!text.includes('export default'))throw new Error('unexpected_source');
+        code=text;area.value=text;button.disabled=false;button.textContent='コード全体をコピー';status.textContent='アルバム・入金管理・地図（場所登録と写真）に対応したコードを読み込みました。';
       }catch{
         status.textContent='コードを読み込めませんでした。このページを再読み込みしてください。';button.textContent='読み込みできませんでした';
       }

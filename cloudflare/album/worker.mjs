@@ -540,14 +540,100 @@ async function feeRoute(request,env,user,path) {
   ledger.updatedBy=user.uid;return json(await writeFee(env,ledger,etag));
 }
 
+// v9.82: authenticated place directory; existing Firebase rules are unchanged.
+const PLACE_PREFIX='map-places/', PLACE_PHOTOS='map-place-photos/';
+const PLACE_PHOTO_MAX=5*1024*1024;
+function placeId(value){if(!UUID.test(value||''))fail(400,'invalid_place');return value;}
+function placeText(value,max,optional=false){
+  if(typeof value!=='string'||value.trim().length>max||(!optional&&!value.trim())||/[\x00-\x1f]/.test(value))fail(400,'invalid_place');
+  return value.trim();
+}
+function placeMapUrl(value){
+  value=placeText(value,2048,true);if(!value)return '';
+  let url;try{url=new URL(value);}catch{fail(400,'invalid_map_url');}
+  const google=/^(www\.)?google\.(com|co\.jp)$/.test(url.hostname)&&/^\/maps(?:\/|$)/.test(url.pathname);
+  if(url.protocol!=='https:'||url.username||url.password||url.port||!(google||url.hostname==='maps.google.com'||url.hostname==='maps.app.goo.gl'||(url.hostname==='goo.gl'&&url.pathname.startsWith('/maps/'))))fail(400,'invalid_map_url');
+  return url.href;
+}
+function placeView(p){return {id:p.id,name:p.name,address:p.address,mapUrl:p.mapUrl,hasPhoto:!!p.photoKey,version:p.version,updatedAt:p.updatedAt};}
+async function readPlace(env,id){
+  const object=await env.MEDIA.get(PLACE_PREFIX+placeId(id)+'.json');if(!object)fail(404,'place_not_found');
+  if(!object.etag)fail(503,'service_unavailable');
+  return {place:await object.json(),etag:object.etag};
+}
+function placePhoto(input){
+  if(!input||typeof input!=='object'||Object.keys(input).some(k=>!['type','data'].includes(k))||typeof input.data!=='string'||input.data.length>Math.ceil(PLACE_PHOTO_MAX/3)*4||!['image/jpeg','image/png','image/webp'].includes(input.type)||(input.data.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data)))fail(400,'invalid_place_photo');
+  let data;try{data=Uint8Array.from(atob(input.data),c=>c.charCodeAt(0));}catch{fail(400,'invalid_place_photo');}
+  if(!data.length||data.length>PLACE_PHOTO_MAX)fail(413,'file_too_large');
+  const valid=input.type==='image/jpeg'?data[0]===255&&data[1]===216&&data[2]===255:input.type==='image/png'?[137,80,78,71,13,10,26,10].every((n,i)=>data[i]===n):new TextDecoder().decode(data.slice(0,4))==='RIFF'&&new TextDecoder().decode(data.slice(8,12))==='WEBP';
+  if(!valid)fail(400,'invalid_place_photo');return {data,type:input.type};
+}
+async function cleanupPlacePhotos(env,place){
+  try{for(const key of place?.cleanupPhotoKeys||[])await env.MEDIA.delete(key);}catch{fail(503,'place_photo_cleanup_pending');}
+}
+async function placeRoute(request,env,user,path){
+  if(path==='/places'&&request.method==='GET'){
+    const cursor=new URL(request.url).searchParams.get('cursor')||'';if(cursor.length>4096)fail(400,'invalid_page');
+    const page=await env.MEDIA.list({prefix:PLACE_PREFIX,limit:50,...(cursor?{cursor}:{})});
+    const places=(await Promise.all(page.objects.map(async item=>{const obj=await env.MEDIA.get(item.key);return obj?obj.json():null;}))).filter(p=>p&&!p.deletedAt).map(placeView);
+    return json({places,nextCursor:page.truncated?page.cursor:'',features:{mapPlaces:true}});
+  }
+  const match=path.match(/^\/places\/([^/]+)(\/photo)?$/);if(!match)fail(404,'not_found');
+  const id=placeId(match[1]);
+  if(request.method==='GET'){
+    const {place}=await readPlace(env,id);if(place.deletedAt)fail(404,'place_not_found');
+    if(!match[2])return json(placeView(place));
+    if(!place.photoKey)fail(404,'place_photo_not_found');
+    const photo=await env.MEDIA.get(place.photoKey);if(!photo)fail(404,'place_photo_not_found');
+    return new Response(photo.body,{headers:{'Content-Type':photo.httpMetadata?.contentType||'application/octet-stream','Content-Disposition':'inline'}});
+  }
+  if(user.role!=='admin')fail(403,'access_denied');
+  if(match[2]||!['PUT','DELETE'].includes(request.method))fail(404,'not_found');
+  const input=await readJson(request,7*1024*1024);
+  if(Object.keys(input).some(k=>!(request.method==='DELETE'?['version','operationId']:['version','operationId','name','address','mapUrl','photo','removePhoto']).includes(k)))fail(400,'invalid_place');
+  placeId(input.operationId);
+  if(typeof input.version!=='string'||(input.version&&!UUID.test(input.version)))fail(400,'invalid_place');
+  // The same operation may be retried after a lost response without creating a duplicate.
+  const digest=base64url(new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(JSON.stringify(input)))));
+  let prior=null,etag='';
+  try{const saved=await readPlace(env,id);prior=saved.place;etag=saved.etag;}catch(e){if(e.message!=='place_not_found')throw e;}
+  await cleanupPlacePhotos(env,prior);
+  if(prior?.operationId===input.operationId){if(prior.operationUser!==user.uid||prior.operationDigest!==digest)fail(409,'place_conflict');return json(placeView(prior));}
+  if(prior?.deletedAt)fail(410,'place_deleted');
+  if((prior?.version||'')!==input.version)fail(409,'place_conflict');
+  if(request.method==='DELETE'&&!prior)fail(404,'place_not_found');
+  const next={...prior,id,operationId:input.operationId,operationUser:user.uid,operationDigest:digest,version:crypto.randomUUID(),updatedAt:Date.now(),updatedBy:user.uid};
+  let newPhoto='';
+  if(request.method==='DELETE'){next.deletedAt=Date.now();next.photoKey='';}
+  else{
+    next.name=placeText(input.name,120);next.address=placeText(input.address,300);next.mapUrl=placeMapUrl(input.mapUrl);
+    if(input.removePhoto!==undefined&&typeof input.removePhoto!=='boolean')fail(400,'invalid_place');
+    if(input.photo&&input.removePhoto)fail(400,'invalid_place');
+    if(input.removePhoto)next.photoKey='';
+    if(input.photo){
+      const photo=placePhoto(input.photo);newPhoto=PLACE_PHOTOS+id+'/'+crypto.randomUUID();
+      await env.MEDIA.put(newPhoto,photo.data,{httpMetadata:{contentType:photo.type}});next.photoKey=newPhoto;
+    }
+    if(!prior){next.createdAt=Date.now();next.createdBy=user.uid;}
+  }
+  next.cleanupPhotoKeys=prior?.photoKey&&prior.photoKey!==next.photoKey?[prior.photoKey]:[];
+  const result=await env.MEDIA.put(PLACE_PREFIX+id+'.json',JSON.stringify(next),{httpMetadata:{contentType:'application/json'},onlyIf:etag?{etagMatches:etag}:new Headers({'If-None-Match':'*'})});
+  if(!result){if(newPhoto)await env.MEDIA.delete(newPhoto);fail(409,'place_conflict');}
+  // Keep the cleanup key in the committed record so a failed deletion can be retried.
+  await cleanupPlacePhotos(env,next);
+  return json(placeView(next),prior?200:201);
+}
+
+
 async function route(request,env) {
   if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
-  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true}});
+  if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true,mapPlaces:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
   const write=path.endsWith('/delete-preview')||(!['GET','HEAD'].includes(request.method)&&!(request.method==='POST'&&/^\/media\/[^/]+\/access$/.test(path)));
   const user=await authenticate(request,env,write||path==='/fees'||path.startsWith('/fees/'));
+  if(path==='/places'||path.startsWith('/places/'))return placeRoute(request,env,user,path);
   if(path==='/fees'||path.startsWith('/fees/'))return feeRoute(request,env,user,path);
   if(path==='/folders'&&request.method==='GET')return listFolders(request,env,user);
   if(path==='/folders'&&request.method==='POST')return createFolder(request,env,user);

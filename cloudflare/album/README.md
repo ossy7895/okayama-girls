@@ -118,3 +118,15 @@ node --test --test-isolation=none cloudflare/album/client.test.mjs
 - [Firestore REST APIの認証と権限](https://firebase.google.com/docs/firestore/use-rest-api)
 - [R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)
 - [R2 multipart API](https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/)
+
+
+## v9.82 地図・場所
+
+地図機能は既存Workerの全文更新が必要です。コピー画面から既存のアルバム・入金処理を含むworker.mjs全体を置き換えます。新しいSecret、バケット、IAM権限、Firestoreコレクション／ルール変更は不要です。既存R2バインディングMEDIA内のmap-places/とmap-place-photos/を使用します。
+
+- GET /places（50件ずつ・カーソル対応）、GET /places/{UUID}、GET /places/{UUID}/photoは管理者／メンバー認証が必須。
+- PUT /places/{UUID}、DELETE /places/{UUID}は毎回管理者認証が必須。写真はJPEG/PNG/WebP、5MBまで。
+- version・ETag・operationIdで競合と重複書込を防止。削除済み記録で復活を防止し、旧写真の削除失敗は同じ操作で再試行可能。
+- health?check=982のfeatures.mapPlaces:trueと既存6フラグを確認。本番操作の結合確認とは区別する。
+
+詳細は[地図v9.82](../../tests/地図-v9.82.md)を参照してください。
