@@ -5,6 +5,8 @@
   "main": "cloudflare/album/worker.mjs",
   "compatibility_date": "2026-10-19",
   "workers_dev": true,
+  "keep_vars": true,
+  "secrets": { "required": ["FIREBASE_SERVICE_ACCOUNT", "MEDIA_SIGNING_KEY"] },
   "r2_buckets": [
     {
       "binding": "MEDIA",
