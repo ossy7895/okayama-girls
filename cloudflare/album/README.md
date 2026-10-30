@@ -172,3 +172,33 @@ API公開後に設定不足で503となる場合、/healthはready:falseとmissi
 両方のWrangler設定にkeep_vars:trueを指定して、管理画面に追加した通常変数をコードの公開時に意図せず除去しないようにします。暗号化Secretの保持とkeep_varsは別の仕組みです。さらにsecrets.requiredに上記2つの名前だけを宣言し、不足したままコード公開が成功扱いになることを防ぎます。値は設定ファイルに含めません。復旧が終わるまで、GitHub連携ビルドが不足Secretを理由に失敗する場合があります。
 
 値をユーザーの手元で保管している場合は、既存Workerのプロダクションの「変数を追加する」でタイプSecretを選び、元の名前・元の値をCloudflareへ直接設定してデプロイします。値やJSON本文をチャットやリポジトリへ転記しません。保管状況が不明な場合は、鍵の再発行や過去版への切替を独断で行わず、復旧方法を確認します。
+
+
+## 現在公開中の版の設定を引き継ぐ公開（復旧用・2026-10-30）
+
+ユーザー承認の一時切替後、c6e58d7bの公開healthはHTTP 200・ready:trueと既存6フラグを返しました。ただし、その後の通常の再公開はビルド段階で失敗しています。Cloudflare公式仕様では、通常のスクリプトアップロードが参照するのは最終アップロード版であり、現在公開中の版とは限りません。
+
+この場合は、Workers Buildsのデプロイコマンドを次へ変更します。
+
+```
+node cloudflare/album/deploy-worker.mjs
+```
+
+この公開用スクリプトはNode.jsの標準機能だけを使い、既存のWorkers Buildsが渡すCLOUDFLARE_API_TOKENを通常のAPI認証として利用します。値の表示・外部送信先への転送・秘密ファイルの探索は行いません。追加のサービスやpackage.jsonは導入しません。
+
+- 既存APIの読み取り専用healthでreadyと既存6機能を事前確認します。
+- 公開中のデプロイIDだけを取得します。Secretや通常変数の値を取得するAPIは呼びません。単一版が100%公開されていることと、確認中に切り替わっていないことを検査します。
+- 既存6バインディングすべてを、公開中のversion_idを明示したinheritとしてCloudflare内で引き継ぎます。新しい値や鍵は作成・送信しません。
+- 公式Workers APIのPOST /accounts/{account_id}/workers/workers/{worker_id}/versions?deploy=trueへ、既存のworker.mjs全文とバインディングの名前・引継ぎ元版番号だけを送ります。静的アセットは含めません。
+- 対象は既存white-leaf-338bだけです。コードの互換日は従来の2026-10-19を使います。ドメイン・公開URL・Firebase認証方式・Firestoreルール・R2データは変更しません。
+- 公開後は地図と全員編集を含む全8フラグを再確認します。失敗時は他の担当者が版を変えていない場合だけ直前の公開版へ切り戻します。ユーザーの一時復旧承認の範囲内で行います。
+- ログには公開版番号と確認結果だけを出します。Cloudflare APIの生の応答・入力コード・トークン・Secret値は出力しません。
+
+通常のWrangler公開へ戻す場合も、最終アップロード版の設定が揃っているかを先に確認します。設定が戻ったという理由だけで必須設定の検査を外して再公開しません。
+
+模擬テスト: `node --test --test-isolation=none cloudflare/album/deploy-worker.test.mjs`（12件通過）。本番データの試験変更を伴う検証は行っていません。
+
+公式仕様:
+- https://developers.cloudflare.com/workers/observability/errors/#inherit-binding-errors-10057
+- https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/subresources/versions/methods/create/
+- https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/
