@@ -130,3 +130,22 @@ node --test --test-isolation=none cloudflare/album/client.test.mjs
 - health?check=983のfeatures.mapPlaces:true、mapPlacesSharedEditing:trueと既存6フラグを確認。本番操作の結合確認とは区別する。
 
 詳細は[地図v9.82](../../tests/地図-v9.82.md)を参照してください。
+
+
+## スマートフォンから設定するGitHub連携公開（2026-10-30）
+
+iPhoneのコードエディタでペーストが利用できない場合は、既存WorkerのSettings → Builds → ConnectでGitHubに接続します。ユーザーから接続設定を完了した旨の連絡を受けています。新しいWorkerは作成しません。ビルドと公開が成功したかは、設定完了とは別に確認します。
+
+今回案内した設定:
+
+- Worker: white-leaf-338b（既存）
+- GitHub: ossy7895/okayama-girls、main
+- ビルドコマンド: 空欄
+- デプロイコマンド: `npx wrangler deploy --config cloudflare/album/wrangler.jsonc`
+- プレビュービルド: 無効
+
+デプロイコマンドがリポジトリルートから既存設定ファイルを指定するため、ルートディレクトリ欄の入力は不要です。設定ファイルのname・main・MEDIAバインディング・通常変数は現行のものを使用します。既存WorkerのSecretをチャットやGitHubへ転記せず、ビルド用の変数へ複製しません。
+
+接続後にmainへPushするとCloudflareのビルドが開始します。GitHub側のチェック、Cloudflareのビルド結果、healthのmapPlaces/mapPlacesSharedEditingと既存6フラグを確認します。GitHub Pagesの成功だけでWorkerも公開済みとは報告しません。本番の登録・編集・削除を伴う試験は行いません。
+
+以後もWorker公開はその回に依頼された変更の範囲で実施します。連携権限や料金プランを独断で拡張しません。
