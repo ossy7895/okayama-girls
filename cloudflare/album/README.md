@@ -158,3 +158,8 @@ iPhoneのコードエディタでペーストが利用できない場合は、�
 そのため、リポジトリルートにもwrangler.jsoncを配置し、mainをcloudflare/album/worker.mjsへ明示しました。ルートから通常の`npx wrangler deploy`が実行された場合も、サイト本体の自動検出を避けて既存WorkerのAPIを公開します。明示的な`--config cloudflare/album/wrangler.jsonc`を指定する既存コマンドも引き続き利用できます。
 
 両設定はmainの相対パス以外を一致させます。Worker名・互換日・workers.dev・MEDIAバインディング・通常変数は変更せず、Secretは設定ファイルに含めません。独立したフレームワークやビルド用package.jsonは導入しません。公開後は/healthがJSONで返ることと全8フラグを確認します。
+
+
+### 設定不足の読み取り専用診断
+
+API公開後に設定不足で503となる場合、/healthはready:falseとmissingConfiguration（不足するバインディング・変数・Secretの名前だけ）を返します。Secretの値やJSONの内容は返しません。通常のAPIは従来どおり設定不足を拒否します。名前の一覧を使って既存の設定を確認し、秘密情報の送付・読み出しや、原因未確認の鍵の再作成は行いません。

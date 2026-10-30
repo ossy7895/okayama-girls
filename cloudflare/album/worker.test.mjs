@@ -283,3 +283,14 @@ test('a photo already uploading when its destination folder is removed is retain
   const preview=await (await api(env,'/folders/'+id+'/delete-preview',{method:'GET'})).json();assert.equal((await api(env,'/folders/'+id,{method:'DELETE',body:{updateTime:preview.updateTime}})).status,200);
   assert.equal((await finish(env,upload,[part])).status,200);assert.equal(state.docs.get(upload.id).fields.folderId,undefined);assert.ok(await env.MEDIA.head('album-media/'+upload.id));
 }));
+
+
+test('health identifies missing configuration names without exposing any secret values',async()=>{
+  const {env}=fixture();
+  for(const name of ['MEDIA','FIREBASE_WEB_API_KEY','FIREBASE_SERVICE_ACCOUNT','MEDIA_SIGNING_KEY']){
+    const response=await api({...env,[name]:undefined},'/health',{method:'GET',token:null});assert.equal(response.status,503);
+    const data=await response.json();assert.equal(data.ready,false);assert.equal(data.error,'album_not_configured');assert.deepEqual(data.missingConfiguration,[name]);
+    assert.equal(JSON.stringify(data).includes(env.MEDIA_SIGNING_KEY),false);assert.equal(JSON.stringify(data).includes(env.FIREBASE_SERVICE_ACCOUNT),false);
+  }
+  const response=await api({...env,MEDIA_SIGNING_KEY:'short'},'/health',{method:'GET',token:null});assert.deepEqual((await response.json()).missingConfiguration,['MEDIA_SIGNING_KEY']);
+});

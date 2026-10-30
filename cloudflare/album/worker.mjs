@@ -626,8 +626,17 @@ async function placeRoute(request,env,user,path){
 
 
 async function route(request,env) {
-  if (!env.MEDIA || !env.FIREBASE_WEB_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT || typeof env.MEDIA_SIGNING_KEY !== 'string' || env.MEDIA_SIGNING_KEY.length < 32)fail(503,'album_not_configured');
   const path=new URL(request.url).pathname;
+  const missingConfiguration=[];
+  if(!env.MEDIA)missingConfiguration.push('MEDIA');
+  if(!env.FIREBASE_WEB_API_KEY)missingConfiguration.push('FIREBASE_WEB_API_KEY');
+  if(!env.FIREBASE_SERVICE_ACCOUNT)missingConfiguration.push('FIREBASE_SERVICE_ACCOUNT');
+  if(typeof env.MEDIA_SIGNING_KEY!=='string'||env.MEDIA_SIGNING_KEY.length<32)missingConfiguration.push('MEDIA_SIGNING_KEY');
+  if(missingConfiguration.length){
+    // Report configuration names only. Never expose their values or parse a secret for diagnostics.
+    if(path==='/health'&&request.method==='GET')return json({ready:false,error:'album_not_configured',missingConfiguration},503);
+    fail(503,'album_not_configured');
+  }
   if (path==='/health' && request.method==='GET')return json({ready:true,features:{albumFolders:true,metadataEditing:true,mediaDeletion:true,folderDeletion:true,feeLedger:true,feeLedgerEditing:true,mapPlaces:true,mapPlacesSharedEditing:true}});
   const object=path.match(/^\/objects\/([^/]+)$/);
   if(object && ['GET','HEAD'].includes(request.method))return serveMedia(request,env,object[1]);
