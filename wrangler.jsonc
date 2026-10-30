@@ -1,0 +1,19 @@
+// Repository-root entry for Workers Builds. Runtime settings match cloudflare/album/wrangler.jsonc.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "white-leaf-338b",
+  "main": "cloudflare/album/worker.mjs",
+  "compatibility_date": "2026-10-19",
+  "workers_dev": true,
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "okayama-girls-media"
+    }
+  ],
+  "vars": {
+    "FIREBASE_PROJECT_ID": "okayama-girls",
+    "FIREBASE_WEB_API_KEY": "AIzaSyAjKw1wfK3OzQDmSs1iSttA2BLwZ9Zxw8k",
+    "ALLOWED_ORIGIN": "https://ossy7895.github.io"
+  }
+}

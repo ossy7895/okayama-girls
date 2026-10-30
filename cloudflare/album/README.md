@@ -149,3 +149,12 @@ iPhoneのコードエディタでペーストが利用できない場合は、�
 接続後にmainへPushするとCloudflareのビルドが開始します。GitHub側のチェック、Cloudflareのビルド結果、healthのmapPlaces/mapPlacesSharedEditingと既存6フラグを確認します。GitHub Pagesの成功だけでWorkerも公開済みとは報告しません。本番の登録・編集・削除を伴う試験は行いません。
 
 以後もWorker公開はその回に依頼された変更の範囲で実施します。連携権限や料金プランを独断で拡張しません。
+
+
+### リポジトリルートからの公開対象の明示
+
+2026-10-30、最初のWorkers Builds成功後、APIのルートURLがサイト本体のindex.htmlとバイト単位で一致し、/healthが空の404応答を返す状態を確認しました。ビルド成功だけではAPIコードの公開を証明できません。
+
+そのため、リポジトリルートにもwrangler.jsoncを配置し、mainをcloudflare/album/worker.mjsへ明示しました。ルートから通常の`npx wrangler deploy`が実行された場合も、サイト本体の自動検出を避けて既存WorkerのAPIを公開します。明示的な`--config cloudflare/album/wrangler.jsonc`を指定する既存コマンドも引き続き利用できます。
+
+両設定はmainの相対パス以外を一致させます。Worker名・互換日・workers.dev・MEDIAバインディング・通常変数は変更せず、Secretは設定ファイルに含めません。独立したフレームワークやビルド用package.jsonは導入しません。公開後は/healthがJSONで返ることと全8フラグを確認します。
