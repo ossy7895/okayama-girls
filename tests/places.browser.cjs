@@ -97,7 +97,7 @@ class R2{
  assert.equal(await shortCard.locator('.place-map-web').getAttribute('href'),'https://maps.app.goo.gl/mock');
  assert.match(await searchCard.locator('.place-map-app').getAttribute('href'),/^comgooglemapsurl:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
  assert.equal(await longCard.locator('.place-map-app').getAttribute('target'),null);assert.equal(await longCard.locator('.place-map-web').getAttribute('target'),'_blank');
- assert.equal(await longCard.getByRole('link',{name:'Googleマップアプリで開く',exact:true}).count(),1);assert.equal(await longCard.getByRole('link',{name:'Web版で開く',exact:true}).count(),1);
+ assert.equal(await longCard.getByRole('link',{name:'アプリで開く',exact:true}).count(),1);assert.equal(await longCard.getByRole('link',{name:'Web版で開く',exact:true}).count(),1);
  await searchCard.locator('[data-place-open]').click();assert.equal(await iphone.locator('.place-map-app').count(),1);
  await iphone.locator('#tab-map').screenshot({path:'/tmp/okayama-map-iphone-links.png'});assert.equal(await iphone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await iphone.locator('#tab-map [data-tab="attendance"]').click();await iphone.locator('[data-event-place="missing"]').click();await iphone.waitForFunction(()=>document.getElementById('place-status').textContent.includes('該当する登録場所'));
