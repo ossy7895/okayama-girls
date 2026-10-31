@@ -32,7 +32,7 @@ class R2{
  try{
  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:1});
  await context.exposeBinding('recordEventWrite',(_,data)=>eventWrites.push(data));
- await context.route('**/*',async route=>{
+ const handleRoute=async route=>{
    const request=route.request(),url=new URL(request.url());
    if(url.origin===ORIGIN)return route.fulfill({contentType:'text/html',body:html});
    if(url.hostname==='www.gstatic.com')return route.fulfill({contentType:'application/javascript',headers:{'Access-Control-Allow-Origin':'*'},body:sdk});
@@ -45,7 +45,8 @@ class R2{
      return route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:Buffer.from(await response.arrayBuffer())});
    }
    throw Error('Unexpected request (blocked): '+request.url());
- });
+ };
+ await context.route('**/*',handleRoute);
  const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error('Page error:',e.message);});page.on('dialog',d=>d.accept());
  await page.goto(ORIGIN);await page.locator('#app-screen:not(.hidden)').waitFor();
  await page.locator('.nav-btn[data-tab="attendance"]').click();await page.locator('[data-event-place="linked"]').click();
@@ -78,7 +79,32 @@ class R2{
  await page.locator('#place-add').click();await page.locator('#place-name').fill('メンバー追加の場所');await page.locator('#place-address').fill('岡山市 模擬住所');await page.locator('#place-form button[type=submit]').click();await page.locator('#place-editor-modal').waitFor({state:'hidden'});assert.equal(await page.locator('.place-card h3').innerText(),'メンバー追加の場所');
  await page.locator('[data-place-delete]').click();await page.waitForFunction(()=>document.getElementById('place-status').textContent.includes('削除しました'));assert.equal(await page.locator('.place-card h3').innerText(),'メンバーが変更した球場');
 
+ // iOS uses a native app link in the same tab and retains the exact HTTPS fallback.
+ assert.equal(await page.locator('.place-map-app').count(),0);
+ const longUrl='https://www.google.com/maps/search/?api=1&query=Okayama&query_place_id=mock-place';
+ for(const place of [{name:'iOS通常URL',address:'岡山市 模擬住所',mapUrl:longUrl},{name:'iOS短縮URL & 検証',address:'岡山市 模擬住所2',mapUrl:'https://maps.app.goo.gl/mock'}]){
+   const response=await worker.fetch(new Request(apiBase+'/places/'+crypto.randomUUID(),{method:'PUT',headers:{Origin:ORIGIN,Authorization:'Bearer member'},body:JSON.stringify({...place,version:'',operationId:crypto.randomUUID()})}),env);assert.equal(response.status,201);
+ }
+ const ios=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
+ await ios.addInitScript(()=>window.mockRole='member');await ios.route('**/*',handleRoute);
+ const iphone=await ios.newPage();iphone.on('pageerror',e=>errors.push(e.message));
+ await iphone.goto(ORIGIN);await iphone.locator('#app-screen:not(.hidden)').waitFor();await iphone.locator('#tab-home [data-tab="map"]').click();await iphone.locator('.place-card').first().waitFor();
+ assert.equal(await iphone.locator('#place-map-app-help').isVisible(),true);
+ const longCard=iphone.locator('.place-card').filter({hasText:'iOS通常URL'}),shortCard=iphone.locator('.place-card').filter({hasText:'iOS短縮URL & 検証'}),searchCard=iphone.locator('.place-card').filter({hasText:'メンバーが変更した球場'});
+ assert.equal(await longCard.locator('.place-map-app').getAttribute('href'),longUrl.replace(/^https:/,'comgooglemapsurl:'));
+ assert.equal(await longCard.locator('.place-map-web').getAttribute('href'),longUrl);
+ assert.equal(await shortCard.locator('.place-map-app').getAttribute('href'),'comgooglemaps://?q='+encodeURIComponent('iOS短縮URL & 検証 岡山市 模擬住所2'));
+ assert.equal(await shortCard.locator('.place-map-web').getAttribute('href'),'https://maps.app.goo.gl/mock');
+ assert.match(await searchCard.locator('.place-map-app').getAttribute('href'),/^comgooglemapsurl:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/);
+ assert.equal(await longCard.locator('.place-map-app').getAttribute('target'),null);assert.equal(await longCard.locator('.place-map-web').getAttribute('target'),'_blank');
+ assert.equal(await longCard.getByRole('link',{name:'Googleマップアプリで開く',exact:true}).count(),1);assert.equal(await longCard.getByRole('link',{name:'Web版で開く',exact:true}).count(),1);
+ await searchCard.locator('[data-place-open]').click();assert.equal(await iphone.locator('.place-map-app').count(),1);
+ await iphone.locator('#tab-map').screenshot({path:'/tmp/okayama-map-iphone-links.png'});assert.equal(await iphone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await iphone.locator('#tab-map [data-tab="attendance"]').click();await iphone.locator('[data-event-place="missing"]').click();await iphone.waitForFunction(()=>document.getElementById('place-status').textContent.includes('該当する登録場所'));
+ assert.match(await iphone.locator('.place-map-app').getAttribute('href'),/^comgooglemapsurl:/);assert.match(await iphone.locator('.place-map-web').getAttribute('href'),/^https:/);
+ await ios.close();
+
  await page.locator('#logout-button').click();await page.locator('#login-screen:not(.hidden)').waitFor();assert.equal(await page.locator('#place-list').innerHTML(),'');
- assert.deepEqual(errors,[]);console.log('Browser checks passed: real HTML + Worker, mobile viewport, CRUD, original photo, Google links, ID/name navigation, event selection, member permissions, logout.');console.log(JSON.stringify({mockRequests:requests.length,eventWrites:eventWrites.length,screenshots:['/tmp/okayama-map-detail.png','/tmp/okayama-map-member.png']}));
+ assert.deepEqual(errors,[]);console.log('Browser checks passed: real HTML + Worker, mobile viewport, CRUD, original photo, iOS app/web links, ID/name navigation, event selection, member permissions, logout.');console.log(JSON.stringify({mockRequests:requests.length,eventWrites:eventWrites.length,screenshots:['/tmp/okayama-map-detail.png','/tmp/okayama-map-member.png','/tmp/okayama-map-iphone-links.png']}));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
