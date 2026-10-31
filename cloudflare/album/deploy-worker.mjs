@@ -14,6 +14,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function deployWorker({fetcher=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,code,delay=ms=>new Promise(r=>setTimeout(r,ms)),log=()=>{}}={}){
   if(typeof token!=='string'||!token)throw Error('Workers Buildsのデプロイ認証が利用できません。トークンをチャットへ送らず、Buildsの認証設定を確認してください。');
   code=code??await readFile(new URL('./worker.mjs',import.meta.url),'utf8');
+  const entry=await readFile(new URL('./worker-entry.mjs',import.meta.url),'utf8');
   if(!code.includes('mapPlacesSharedEditing:true')||!code.includes('export default'))throw Error('地図対応のWorkerソースが見つかりません。公開していません。');
   async function api(path,{method='GET',body}={}){
     let response;try{response=await fetcher(API+path,{method,redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});}catch{throw Error('Cloudflare APIとの通信に失敗しました。');}
@@ -36,10 +37,13 @@ export async function deployWorker({fetcher=globalThis.fetch,token=process.env.C
   // This endpoint explicitly accepts a source version ID for inherit bindings.
   // The older /scripts/.../versions endpoint only inherits from latest upload.
   const created=await api(`/workers/${NAME}/versions?deploy=true`,{method:'POST',body:{
-    main_module:'worker.mjs',compatibility_date:'2026-10-19',
-    annotations:{workers_message:'OKAYAMA Girls v9.83 API; inherit active runtime bindings'},
+    main_module:'worker-entry.mjs',compatibility_date:'2026-10-19',
+    annotations:{'workers/message':'OKAYAMA Girls v9.83 API; inherit active runtime bindings'},
     bindings:BINDINGS.map(name=>({name,type:'inherit',version_id:source})),
-    modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:Buffer.from(code,'utf8').toString('base64')}]
+    modules:[
+      {name:'worker-entry.mjs',content_type:'application/javascript+module',content_base64:Buffer.from(entry,'utf8').toString('base64')},
+      {name:'worker.mjs',content_type:'application/javascript+module',content_base64:Buffer.from(code,'utf8').toString('base64')}
+    ]
   }});
   if(!UUID.test(created?.id||''))throw Error('公開結果のバージョンIDを確認できません。手動で公開状態を確認してください。');
   const versionId=created.id;

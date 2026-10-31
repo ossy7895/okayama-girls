@@ -2,7 +2,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "white-leaf-338b",
-  "main": "cloudflare/album/worker.mjs",
+  "main": "cloudflare/album/worker-entry.mjs",
   "compatibility_date": "2026-10-19",
   "workers_dev": true,
   "keep_vars": true,

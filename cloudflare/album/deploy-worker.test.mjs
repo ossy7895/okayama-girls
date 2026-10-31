@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {deployWorker} from './deploy-worker.mjs';
+import * as entry from './worker-entry.mjs';
+import worker from './worker.mjs';
 const code=await readFile(new URL('./worker.mjs',import.meta.url),'utf8');
 const SOURCE='c6e58d7b-1111-4111-8111-111111111111',NEXT='12345678-2222-4222-8222-222222222222',OTHER='aaaaaaaa-3333-4333-8333-333333333333';
 const BASE=['albumFolders','metadataEditing','mediaDeletion','folderDeletion','feeLedger','feeLedgerEditing'],ALL=[...BASE,'mapPlaces','mapPlacesSharedEditing'];
@@ -39,8 +41,15 @@ test('deploy inherits all existing binding names from the active version, never 
  const upload=f.calls.find(c=>c.method==='POST');assert.match(upload.url.pathname,/\/workers\/workers\/white-leaf-338b\/versions$/);
  assert.deepEqual(upload.body.bindings.map(b=>b.name),['MEDIA','FIREBASE_PROJECT_ID','FIREBASE_WEB_API_KEY','ALLOWED_ORIGIN','FIREBASE_SERVICE_ACCOUNT','MEDIA_SIGNING_KEY']);
  for(const binding of upload.body.bindings)assert.deepEqual(Object.keys(binding).sort(),['name','type','version_id']);assert.ok(upload.body.bindings.every(b=>b.type==='inherit'&&b.version_id===SOURCE));
- assert.equal(Buffer.from(upload.body.modules[0].content_base64,'base64').toString(),code);assert.equal(upload.body.assets,undefined);assert.equal(f.active,NEXT);
+ assert.equal(upload.body.main_module,'worker-entry.mjs');
+ assert.deepEqual(upload.body.annotations,{'workers/message':'OKAYAMA Girls v9.83 API; inherit active runtime bindings'});
+ assert.equal(Buffer.from(upload.body.modules.find(m=>m.name==='worker.mjs').content_base64,'base64').toString(),code);
+ assert.equal(Buffer.from(upload.body.modules.find(m=>m.name==='worker-entry.mjs').content_base64,'base64').toString(),await readFile(new URL('./worker-entry.mjs',import.meta.url),'utf8'));
+ assert.equal(upload.body.modules.length,2);assert.equal(upload.body.assets,undefined);assert.equal(f.active,NEXT);
  assert.equal(JSON.stringify(f.logs).includes(f.secret),false);assert.equal(JSON.stringify(f.logs).includes('mock-build-token'),false);assert.equal(JSON.stringify(result).includes(f.secret),false);
+});
+test('runtime entry exposes only the same request handler, never test constants or helper functions',()=>{
+ assert.deepEqual(Object.keys(entry),['default']);assert.equal(entry.default,worker);assert.equal(typeof entry.default.fetch,'function');
 });
 test('missing build credentials prevent every network call',async()=>{const f=fixture();await assert.rejects(f.run({token:''}),/デプロイ認証/);assert.equal(f.calls.length,0);});
 test('wrong local source prevents every network call',async()=>{const f=fixture();await assert.rejects(f.run({code:'export default {}'}),/ソース/);assert.equal(f.calls.length,0);});

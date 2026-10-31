@@ -189,14 +189,16 @@ node cloudflare/album/deploy-worker.mjs
 - 既存APIの読み取り専用healthでreadyと既存6機能を事前確認します。
 - 公開中のデプロイIDだけを取得します。Secretや通常変数の値を取得するAPIは呼びません。単一版が100%公開されていることと、確認中に切り替わっていないことを検査します。
 - 既存6バインディングすべてを、公開中のversion_idを明示したinheritとしてCloudflare内で引き継ぎます。新しい値や鍵は作成・送信しません。
-- 公式Workers APIのPOST /accounts/{account_id}/workers/workers/{worker_id}/versions?deploy=trueへ、既存のworker.mjs全文とバインディングの名前・引継ぎ元版番号だけを送ります。静的アセットは含めません。
+- 公式Workers APIのPOST /accounts/{account_id}/workers/workers/{worker_id}/versions?deploy=trueへ、既存のworker.mjs全文、defaultだけを再公開するworker-entry.mjs、バインディングの名前・引継ぎ元版番号を送ります。静的アセットは含めません。
 - 対象は既存white-leaf-338bだけです。コードの互換日は従来の2026-10-19を使います。ドメイン・公開URL・Firebase認証方式・Firestoreルール・R2データは変更しません。
 - 公開後は地図と全員編集を含む全8フラグを再確認します。失敗時は他の担当者が版を変えていない場合だけ直前の公開版へ切り戻します。ユーザーの一時復旧承認の範囲内で行います。
 - ログには公開版番号と確認結果だけを出します。Cloudflare APIの生の応答・入力コード・トークン・Secret値は出力しません。
 
 通常のWrangler公開へ戻す場合も、最終アップロード版の設定が揃っているかを先に確認します。設定が戻ったという理由だけで必須設定の検査を外して再公開しません。
 
-模擬テスト: `node --test --test-isolation=none cloudflare/album/deploy-worker.test.mjs`（12件通過）。本番データの試験変更を伴う検証は行っていません。
+2026-10-31の修正: 最初の継承公開はHTTP 400・code 10021で失敗しました。worker.mjsを直接入口にすると、テスト用の数値exportをWorkerの入口として解釈し、`Incorrect type for map entry 'MAX_IMAGE_BYTES'`となることをworkerd 2026-10-30で再現しました。worker-entry.mjsは同じdefaultハンドラーだけを再公開し、元の定数・補助関数は内部モジュールに保持します。Worker本体・認証・バインディング値は変更しません。rootとこのフォルダのWrangler入口も合わせています。
+
+模擬テスト: `node --test --test-isolation=none cloudflare/album/deploy-worker.test.mjs`（13件通過）。workerdで修正後の実モジュール起動と、秘密情報未設定のローカルhealth応答を確認しました。本番データの試験変更を伴う検証は行っていません。これらの検証だけでは本番公開成功を意味しません。
 
 公式仕様:
 - https://developers.cloudflare.com/workers/observability/errors/#inherit-binding-errors-10057
